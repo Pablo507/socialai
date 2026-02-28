@@ -31,7 +31,7 @@ export default function LoginPage() {
         options: { emailRedirectTo: `${location.origin}/dashboard` }
       });
       if (error) setError(error.message);
-      else setMessage('¡Cuenta creada! Revisá tu email para confirmar.');
+      else { setMessage('¡Cuenta creada exitosamente!'); router.push('/dashboard'); }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError('Email o contraseña incorrectos');
