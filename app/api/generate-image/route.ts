@@ -38,29 +38,30 @@ export async function POST(request: Request) {
     ];
 
     const imagePromises = styles.map(async (styledPrompt) => {
-      const response = await fetch(
-        'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ inputs: styledPrompt }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`HF Error: ${error}`);
-      }
-
-      const buffer = await response.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      return `data:image/jpeg;base64,${base64}`;
-    });
-
-    const images = await Promise.all(imagePromises);
+   const images: string[] = [];
+for (const styledPrompt of styles) {
+  const response = await fetch(
+    'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        inputs: styledPrompt,
+        parameters: { num_inference_steps: 4 }
+      }),
+    }
+  );
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`HF Error: ${error}`);
+  }
+  const buffer = await response.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
+  images.push(`data:image/jpeg;base64,${base64}`);
+}
     return Response.json({ images });
 
   } catch (error: any) {
