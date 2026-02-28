@@ -224,7 +224,7 @@ useEffect(() => {
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, padding:20 }}>
                     {images.map((bg, i) => (
                       <div key={i} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer' }}>
-                        <div style={{ height:160, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:40 }}>🎨</div>
+                        <img src={bg} alt={`Versión ${String.fromCharCode(65+i)}`} style={{ width:'100%', height:160, objectFit:'cover' }} />
                         <div style={{ padding:'8px 12px', fontSize:12, color:'#8888aa' }}>Versión {String.fromCharCode(65+i)}</div>
                       </div>
                     ))}
