@@ -1,6 +1,7 @@
 
 'use client';
-import { useState } from 'react';
+'use client';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 export default function DashboardPage() {
   const [usageCount, setUsageCount] = useState(3);
