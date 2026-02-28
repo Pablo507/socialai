@@ -43,11 +43,16 @@ useEffect(() => {
     setCopyLoading(false);
   }
 
-  async function generateImages() {
+ async function generateImages() {
     if (checkUsage()) return;
     setImageLoading(true);
-    await new Promise(r => setTimeout(r, 2500));
-    setImages(['linear-gradient(135deg,#667eea,#764ba2)', 'linear-gradient(135deg,#f093fb,#f5576c)', 'linear-gradient(135deg,#4facfe,#00f2fe)', 'linear-gradient(135deg,#43e97b,#38f9d7)']);
+    const prompt = (document.querySelector('textarea') as HTMLTextAreaElement)?.value || 'producto profesional fondo blanco';
+    const encoded = encodeURIComponent(prompt);
+    const seeds = [42, 123, 777, 999];
+    const urls = seeds.map(seed => 
+      `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&seed=${seed}&nologo=true`
+    );
+    setImages(urls);
     setUsageCount(c => c + 1);
     setImageLoading(false);
   }
