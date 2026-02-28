@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({
             inputs: styledPrompt,
-            parameters: { num_inference_steps: 4 },
+            parameters: { num_inference_steps: 20},
           }),
         }
       );
