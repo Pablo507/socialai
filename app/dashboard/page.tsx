@@ -43,19 +43,30 @@ useEffect(() => {
     setCopyLoading(false);
   }
 
- async function generateImages() {
-    if (checkUsage()) return;
-    setImageLoading(true);
-    const prompt = (document.querySelector('textarea') as HTMLTextAreaElement)?.value || 'producto profesional fondo blanco';
-    const encoded = encodeURIComponent(prompt);
-    const seeds = [42, 123, 777, 999];
-    const urls = seeds.map(seed => 
-      `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&seed=${seed}&nologo=true`
-    );
-    setImages(urls);
-    setUsageCount(c => c + 1);
-    setImageLoading(false);
+async function generateImages() {
+  if (checkUsage()) return;
+  setImageLoading(true);
+  const textarea = document.querySelectorAll('textarea')[1] as HTMLTextAreaElement;
+  const prompt = textarea?.value || 'producto profesional fondo blanco';
+  
+  try {
+    const res = await fetch('/api/generate-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await res.json();
+    if (data.images) {
+      setImages(data.images);
+      setUsageCount(c => c + 1);
+    } else {
+      alert('Error generando imágenes: ' + data.error);
+    }
+  } catch (e) {
+    alert('Error de conexión');
   }
+  setImageLoading(false);
+}
 
   async function generateVideo() {
     if (checkUsage()) return;
