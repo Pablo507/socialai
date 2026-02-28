@@ -6,27 +6,23 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    const enhancedPrompt = `${prompt}, professional photography, high quality, 4k, detailed`;
+    const styles = [
+      `${prompt}, professional photo, high quality, 4k, sharp focus`,
+      `${prompt}, digital art style, vibrant colors, detailed illustration`,
+      `${prompt}, minimalist style, clean background, studio lighting`,
+      `${prompt}, cinematic photography, dramatic lighting, professional`,
+    ];
 
-    const seeds = [42, 123, 777, 999];
-    const imagePromises = seeds.map(async (seed) => {
+    const imagePromises = styles.map(async (styledPrompt) => {
       const response = await fetch(
-        'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0',
+        'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
         {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            inputs: enhancedPrompt,
-            parameters: {
-              seed,
-              num_inference_steps: 20,
-              width: 512,
-              height: 512,
-            },
-          }),
+          body: JSON.stringify({ inputs: styledPrompt }),
         }
       );
 
@@ -40,10 +36,9 @@ export async function POST(request: Request) {
       return `data:image/jpeg;base64,${base64}`;
     });
 
-    // Generamos las 4 imágenes en paralelo
     const images = await Promise.all(imagePromises);
-
     return Response.json({ images });
+
   } catch (error: any) {
     console.error('Image generation error:', error);
     return Response.json({ error: error.message }, { status: 500 });
