@@ -1,7 +1,7 @@
 
 'use client';
 import { useState } from 'react';
-
+import { createClient } from '@/lib/supabase/client';
 export default function DashboardPage() {
   const [usageCount, setUsageCount] = useState(3);
   const maxUsage = 10;
@@ -14,7 +14,12 @@ export default function DashboardPage() {
   const [images, setImages] = useState<string[]>([]);
   const [showVideo, setShowVideo] = useState(false);
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
+  const [user, setUser] = useState<any>(null);
 
+useEffect(() => {
+  const supabase = createClient();
+  supabase.auth.getUser().then(({ data }) => setUser(data.user));
+}, []);
   const copies = [
     `☀️ ¡El verano llegó y nuestros precios bajaron!\n\n🌊 Aprovecha nuestra colección con hasta 30% de descuento.\n\n✅ Envío gratis en pedidos +$50\n✅ Devoluciones sin preguntas\n\nComenta "QUIERO" y te enviamos el catálogo 👇\n\n#Moda #Verano #Descuentos`,
     `💡 ¿Sabías que el 87% de las personas decide una compra viendo solo las primeras fotos?\n\nPor eso cada detalle de nuestra colección está pensado para enamorarte al primer vistazo. ✨\n\n🛒 Link en bio\n\n¿Cuál es tu favorito? 👇`,
