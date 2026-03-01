@@ -1,8 +1,7 @@
-
-'use client';
 'use client';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+
 export default function DashboardPage() {
   const [usageCount, setUsageCount] = useState(3);
   const maxUsage = 10;
@@ -16,11 +15,13 @@ export default function DashboardPage() {
   const [showVideo, setShowVideo] = useState(false);
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
   const [user, setUser] = useState<any>(null);
+  const [imagePrompt, setImagePrompt] = useState('');
 
-useEffect(() => {
-  const supabase = createClient();
-  supabase.auth.getUser().then(({ data }) => setUser(data.user));
-}, []);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
   const copies = [
     `☀️ ¡El verano llegó y nuestros precios bajaron!\n\n🌊 Aprovecha nuestra colección con hasta 30% de descuento.\n\n✅ Envío gratis en pedidos +$50\n✅ Devoluciones sin preguntas\n\nComenta "QUIERO" y te enviamos el catálogo 👇\n\n#Moda #Verano #Descuentos`,
     `💡 ¿Sabías que el 87% de las personas decide una compra viendo solo las primeras fotos?\n\nPor eso cada detalle de nuestra colección está pensado para enamorarte al primer vistazo. ✨\n\n🛒 Link en bio\n\n¿Cuál es tu favorito? 👇`,
@@ -43,30 +44,28 @@ useEffect(() => {
     setCopyLoading(false);
   }
 
-async function generateImages() {
-  if (checkUsage()) return;
-  setImageLoading(true);
-  const textarea = document.querySelectorAll('textarea')[1] as HTMLTextAreaElement;
-  const prompt = textarea?.value || 'producto profesional fondo blanco';
-  
-  try {
-    const res = await fetch('/api/generate-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    });
-    const data = await res.json();
-    if (data.images) {
-      setImages(data.images);
-      setUsageCount(c => c + 1);
-    } else {
-      alert('Error generando imágenes: ' + data.error);
+  async function generateImages() {
+    if (checkUsage()) return;
+    const prompt = imagePrompt.trim() || 'producto profesional fondo blanco';
+    setImageLoading(true);
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      if (data.images) {
+        setImages(data.images);
+        setUsageCount(c => c + 1);
+      } else {
+        alert('Error generando imágenes: ' + data.error);
+      }
+    } catch (e) {
+      alert('Error de conexión');
     }
-  } catch (e) {
-    alert('Error de conexión');
+    setImageLoading(false);
   }
-  setImageLoading(false);
-}
 
   async function generateVideo() {
     if (checkUsage()) return;
@@ -92,19 +91,19 @@ async function generateImages() {
           <div style={{ background:'rgba(124,92,252,.2)', border:'1px solid rgba(124,92,252,.4)', borderRadius:20, padding:'4px 12px', fontSize:12, color:'#7c5cfc', fontWeight:600 }}>
             ✨ {remaining} generaciones restantes
           </div>
-{user 
-  ? <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-      <span style={{ fontSize:14, color:'#8888aa' }}>👤 {user.email}</span>
-      <button onClick={async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        window.location.href = '/auth/login';
-      }} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>
-        Salir
-      </button>
-    </div>
-  : <button onClick={() => window.location.href='/auth/login'} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14 }}>Iniciar sesión</button>
-}
+          {user
+            ? <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:14, color:'#8888aa' }}>👤 {user.email}</span>
+                <button onClick={async () => {
+                  const supabase = createClient();
+                  await supabase.auth.signOut();
+                  window.location.href = '/auth/login';
+                }} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>
+                  Salir
+                </button>
+              </div>
+            : <button onClick={() => window.location.href='/auth/login'} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14 }}>Iniciar sesión</button>
+          }
           <button onClick={() => setShowModal(true)} style={{ background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14, fontWeight:500 }}>Upgrade Pro</button>
         </div>
       </nav>
@@ -207,7 +206,13 @@ async function generateImages() {
               <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea imágenes únicas con IA</p>
               <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
                 <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Descripción</label>
-                <textarea style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }} rows={3} placeholder="Ej: Producto sobre fondo minimalista, iluminación profesional..." />
+                <textarea
+                  value={imagePrompt}
+                  onChange={e => setImagePrompt(e.target.value)}
+                  style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }}
+                  rows={3}
+                  placeholder="Ej: niño feliz comiendo helado, parque soleado..."
+                />
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
                   <div>
                     <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Formato</label>
@@ -223,7 +228,7 @@ async function generateImages() {
                   </div>
                 </div>
                 <button onClick={generateImages} disabled={imageLoading} style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: imageLoading ? 0.7 : 1 }}>
-                  {imageLoading ? '⏳ Generando 4 imágenes...' : '🎨 Generar 4 Imágenes'}
+                  {imageLoading ? '⏳ Generando imágenes (~40s)...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
               {images.length > 0 && (
@@ -233,9 +238,9 @@ async function generateImages() {
                     <button style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>⬇️ Descargar</button>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, padding:20 }}>
-                    {images.map((bg, i) => (
+                    {images.map((src, i) => (
                       <div key={i} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer' }}>
-                        <img src={bg} alt={`Versión ${String.fromCharCode(65+i)}`} style={{ width:'100%', height:160, objectFit:'cover' }} />
+                        <img src={src} alt={`Versión ${String.fromCharCode(65+i)}`} style={{ width:'100%', height:160, objectFit:'cover' }} />
                         <div style={{ padding:'8px 12px', fontSize:12, color:'#8888aa' }}>Versión {String.fromCharCode(65+i)}</div>
                       </div>
                     ))}
