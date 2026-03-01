@@ -9,29 +9,23 @@ export async function POST(request: Request) {
     // Traducir prompt al inglés con Groq
     let englishPrompt = prompt;
     try {
-      const groqRes = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
-            messages: [
-              {
-                role: 'user',
-                content: `Translate this image description to English. Reply ONLY with the translation, nothing else: "${prompt}"`,
-              },
-            ],
-            max_tokens: 100,
-          }),
-        }
-      );
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [{
+            role: 'user',
+            content: `Translate this image description to English. Reply ONLY with the translation, nothing else: "${prompt}"`,
+          }],
+          max_tokens: 100,
+        }),
+      });
       const groqData = await groqRes.json();
-      englishPrompt =
-        groqData.choices?.[0]?.message?.content?.trim() || prompt;
+      englishPrompt = groqData.choices?.[0]?.message?.content?.trim() || prompt;
     } catch {
       console.log('Translation failed, using original prompt');
     }
@@ -43,7 +37,7 @@ export async function POST(request: Request) {
       `${englishPrompt}, cinematic photography, dramatic lighting, professional`,
     ];
 
-    // Generar imágenes secuencialmente para mejores resultados
+    // Generar imágenes secuencialmente
     const images: string[] = [];
     for (const styledPrompt of styles) {
       const response = await fetch(
@@ -51,7 +45,7 @@ export async function POST(request: Request) {
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+            'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
