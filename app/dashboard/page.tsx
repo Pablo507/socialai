@@ -16,6 +16,11 @@ export default function DashboardPage() {
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
   const [user, setUser] = useState<any>(null);
   const [imagePrompt, setImagePrompt] = useState('');
+  const [copyPrompt, setCopyPrompt] = useState('');
+const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Facebook']);
+const [industry, setIndustry] = useState('Restaurante / Gastronomía');
+const [goal, setGoal] = useState('Vender un producto');
+const [tone, setTone] = useState('Amigable');
 
   useEffect(() => {
     const supabase = createClient();
