@@ -1,4 +1,3 @@
-'use client';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -17,35 +16,48 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [imagePrompt, setImagePrompt] = useState('');
   const [copyPrompt, setCopyPrompt] = useState('');
-const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Facebook']);
-const [industry, setIndustry] = useState('Restaurante / Gastronomía');
-const [goal, setGoal] = useState('Vender un producto');
-const [tone, setTone] = useState('Amigable');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Facebook']);
+  const [industry, setIndustry] = useState('Restaurante / Gastronomía');
+  const [goal, setGoal] = useState('Vender un producto');
+  const [tone, setTone] = useState('Amigable');
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
 
-  const copies = [
-    `☀️ ¡El verano llegó y nuestros precios bajaron!\n\n🌊 Aprovecha nuestra colección con hasta 30% de descuento.\n\n✅ Envío gratis en pedidos +$50\n✅ Devoluciones sin preguntas\n\nComenta "QUIERO" y te enviamos el catálogo 👇\n\n#Moda #Verano #Descuentos`,
-    `💡 ¿Sabías que el 87% de las personas decide una compra viendo solo las primeras fotos?\n\nPor eso cada detalle de nuestra colección está pensado para enamorarte al primer vistazo. ✨\n\n🛒 Link en bio\n\n¿Cuál es tu favorito? 👇`,
-    `POV: encontraste exactamente lo que buscabas 👀✨\n\n⚡ Solo por 48 horas\n💥 Stock limitado\n🎁 Regalo sorpresa en cada compra\n\n#TikTokModa #Outfit #GRWM`,
-  ];
-
   function checkUsage() {
     if (usageCount >= maxUsage) { setShowModal(true); return true; }
     return false;
   }
 
+  function togglePlatform(name: string) {
+    setSelectedPlatforms(prev =>
+      prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]
+    );
+  }
+
   async function generateCopy() {
     if (checkUsage()) return;
+    if (!copyPrompt.trim()) { alert('Describí tu producto o idea'); return; }
     setCopyLoading(true);
-    await new Promise(r => setTimeout(r, 2000));
-    const result = copies[Math.floor(Math.random() * copies.length)];
-    setCopyResult(result);
-    setPreviewContent(result.substring(0, 150) + '...');
-    setUsageCount(c => c + 1);
+    try {
+      const res = await fetch('/api/generate-copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms }),
+      });
+      const data = await res.json();
+      if (data.copy) {
+        setCopyResult(data.copy);
+        setPreviewContent(data.copy.substring(0, 150) + '...');
+        setUsageCount(c => c + 1);
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (e) {
+      alert('Error de conexión');
+    }
     setCopyLoading(false);
   }
 
@@ -82,16 +94,18 @@ const [tone, setTone] = useState('Amigable');
   }
 
   const remaining = maxUsage - usageCount;
+  const platformColors: Record<string, string> = {
+    'Facebook': '#1877f2',
+    'Instagram': '#e1306c',
+    'TikTok': '#00e5ff'
+  };
 
   return (
     <div style={{ fontFamily: 'system-ui,sans-serif', background: '#0a0a0f', color: '#f0f0fa', minHeight: '100vh' }}>
       <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
 
-      {/* NAV */}
       <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 32px', borderBottom:'1px solid #2a2a38', background:'rgba(10,10,15,0.9)', position:'sticky', top:0, zIndex:100 }}>
-        <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-          SocialAI
-        </div>
+        <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ background:'rgba(124,92,252,.2)', border:'1px solid rgba(124,92,252,.4)', borderRadius:20, padding:'4px 12px', fontSize:12, color:'#7c5cfc', fontWeight:600 }}>
             ✨ {remaining} generaciones restantes
@@ -103,9 +117,7 @@ const [tone, setTone] = useState('Amigable');
                   const supabase = createClient();
                   await supabase.auth.signOut();
                   window.location.href = '/auth/login';
-                }} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>
-                  Salir
-                </button>
+                }} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
               </div>
             : <button onClick={() => window.location.href='/auth/login'} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14 }}>Iniciar sesión</button>
           }
@@ -113,7 +125,6 @@ const [tone, setTone] = useState('Amigable');
         </div>
       </nav>
 
-      {/* USAGE BAR */}
       <div style={{ padding:'10px 32px', background:'#111118', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', gap:16 }}>
         <span style={{ fontSize:12, color:'#8888aa' }}>Uso gratuito</span>
         <div style={{ flex:1, height:6, background:'#2a2a38', borderRadius:3, overflow:'hidden' }}>
@@ -122,10 +133,8 @@ const [tone, setTone] = useState('Amigable');
         <span style={{ fontSize:12, color:'#8888aa' }}><strong style={{ color:'#e040fb' }}>{usageCount}</strong> / {maxUsage}</span>
       </div>
 
-      {/* LAYOUT */}
       <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 280px', minHeight:'calc(100vh - 100px)' }}>
 
-        {/* SIDEBAR */}
         <aside style={{ borderRight:'1px solid #2a2a38', padding:'24px 12px' }}>
           {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
@@ -140,10 +149,8 @@ const [tone, setTone] = useState('Amigable');
           </div>
         </aside>
 
-        {/* MAIN */}
         <main style={{ padding:32, overflowY:'auto' }}>
 
-          {/* COPYWRITING */}
           {activePanel === 'copy' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>✍️ Generador de Copywriting</h1>
@@ -152,39 +159,58 @@ const [tone, setTone] = useState('Amigable');
                 <div style={{ marginBottom:14 }}>
                   <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Red social destino</label>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {[['📘 Facebook','#1877f2'],['📸 Instagram','#e1306c'],['🎵 TikTok','#00e5ff']].map(([name,color]) => (
-                      <button key={name} style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${color}`, background:`${color}22`, color, fontSize:13, cursor:'pointer' }}>{name}</button>
-                    ))}
+                    {[['📘 Facebook','Facebook'],['📸 Instagram','Instagram'],['🎵 TikTok','TikTok']].map(([label, name]) => {
+                      const active = selectedPlatforms.includes(name);
+                      const color = platformColors[name];
+                      return (
+                        <button key={name} onClick={() => togglePlatform(name)}
+                          style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active ? color : '#2a2a38'}`, background: active ? `${color}22` : 'transparent', color: active ? color : '#8888aa', fontSize:13, cursor:'pointer' }}>
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
                   <div>
                     <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Industria</label>
-                    <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
-                      {['Restaurante / Gastronomía','Moda y Ropa','Fitness y Salud','Tecnología','E-commerce'].map(o => <option key={o}>{o}</option>)}
+                    <select value={industry} onChange={e => setIndustry(e.target.value)}
+                      style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                      {['Restaurante / Gastronomía','Moda y Ropa','Fitness y Salud','Tecnología','E-commerce','Inmobiliaria','Turismo','Educación'].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Objetivo</label>
-                    <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
-                      {['Vender un producto','Generar engagement','Dar a conocer la marca','Promoción especial'].map(o => <option key={o}>{o}</option>)}
+                    <select value={goal} onChange={e => setGoal(e.target.value)}
+                      style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                      {['Vender un producto','Generar engagement','Dar a conocer la marca','Promoción especial','Conseguir seguidores','Anunciar evento'].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                 </div>
                 <div style={{ marginBottom:14 }}>
                   <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Tono</label>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {['😊 Amigable','💼 Profesional','😂 Divertido','🔥 Urgente','✨ Inspirador'].map(t => (
-                      <button key={t} style={{ padding:'6px 14px', borderRadius:8, border:'1px solid #7c5cfc', background:'rgba(124,92,252,.15)', color:'#7c5cfc', fontSize:12, cursor:'pointer' }}>{t}</button>
+                    {[['😊','Amigable'],['💼','Profesional'],['😂','Divertido'],['🔥','Urgente'],['✨','Inspirador']].map(([emoji, name]) => (
+                      <button key={name} onClick={() => setTone(name)}
+                        style={{ padding:'6px 14px', borderRadius:8, border: tone===name ? '1px solid #7c5cfc' : '1px solid #2a2a38', background: tone===name ? 'rgba(124,92,252,.15)' : 'transparent', color: tone===name ? '#7c5cfc' : '#8888aa', fontSize:12, cursor:'pointer' }}>
+                        {emoji} {name}
+                      </button>
                     ))}
                   </div>
                 </div>
                 <div style={{ marginBottom:14 }}>
                   <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Describe tu producto o idea</label>
-                  <textarea style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none' }} rows={3} placeholder="Ej: Oferta de verano, 30% descuento en ropa de playa..." />
+                  <textarea
+                    value={copyPrompt}
+                    onChange={e => setCopyPrompt(e.target.value)}
+                    style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none' }}
+                    rows={3}
+                    placeholder="Ej: Auriculares Sony negros con carga rápida, precio $2500..."
+                  />
                 </div>
-                <button onClick={generateCopy} disabled={copyLoading} style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: copyLoading ? 0.7 : 1 }}>
-                  {copyLoading ? '⏳ Generando...' : '⚡ Generar Copy con IA'}
+                <button onClick={generateCopy} disabled={copyLoading}
+                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: copyLoading ? 0.7 : 1 }}>
+                  {copyLoading ? '⏳ Generando copy con IA...' : '⚡ Generar Copy con IA'}
                 </button>
               </div>
               {copyResult && (
@@ -204,7 +230,6 @@ const [tone, setTone] = useState('Amigable');
             </div>
           )}
 
-          {/* IMAGES */}
           {activePanel === 'images' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🖼️ Generador de Imágenes</h1>
@@ -232,7 +257,8 @@ const [tone, setTone] = useState('Amigable');
                     </select>
                   </div>
                 </div>
-                <button onClick={generateImages} disabled={imageLoading} style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: imageLoading ? 0.7 : 1 }}>
+                <button onClick={generateImages} disabled={imageLoading}
+                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: imageLoading ? 0.7 : 1 }}>
                   {imageLoading ? '⏳ Generando imágenes (~40s)...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
@@ -255,7 +281,6 @@ const [tone, setTone] = useState('Amigable');
             </div>
           )}
 
-          {/* VIDEOS */}
           {activePanel === 'videos' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🎬 Generador de Videos</h1>
@@ -277,7 +302,8 @@ const [tone, setTone] = useState('Amigable');
                     </select>
                   </div>
                 </div>
-                <button onClick={generateVideo} disabled={videoLoading} style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: videoLoading ? 0.7 : 1 }}>
+                <button onClick={generateVideo} disabled={videoLoading}
+                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: videoLoading ? 0.7 : 1 }}>
                   {videoLoading ? '⏳ Procesando video...' : '🎬 Generar Video'}
                 </button>
               </div>
@@ -296,28 +322,27 @@ const [tone, setTone] = useState('Amigable');
             </div>
           )}
 
-          {/* CALENDAR */}
           {activePanel === 'calendar' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>📅 Calendario Editorial</h1>
               <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Planifica y programa tus publicaciones</p>
               <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24 }}>
-                <h2 style={{ fontFamily:'Syne,sans-serif', fontSize:18, fontWeight:700, marginBottom:16 }}>Febrero 2026</h2>
+                <h2 style={{ fontFamily:'Syne,sans-serif', fontSize:18, fontWeight:700, marginBottom:16 }}>Marzo 2026</h2>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
                   {['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => (
                     <div key={d} style={{ textAlign:'center', fontSize:11, color:'#8888aa', padding:'6px 0', fontWeight:600 }}>{d}</div>
                   ))}
-                  {[26,27,28,29,30,31,1].map(d => (
-                    <div key={`p${d}`} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:8, minHeight:72, padding:6, opacity:0.35 }}>
-                      <div style={{ fontSize:12, color:'#8888aa' }}>{d}</div>
+                  {[1,2,3,4,5,6,7].map(d => (
+                    <div key={d} style={{ background: d===1 ? 'rgba(124,92,252,.08)' : '#18181f', border: d===1 ? '1px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:8, minHeight:72, padding:6, cursor:'pointer' }}>
+                      <div style={{ fontSize:12, color: d===1 ? '#7c5cfc' : '#8888aa', fontWeight: d===1 ? 700 : 500 }}>{d}</div>
                     </div>
                   ))}
-                  {Array.from({length:28},(_,i)=>i+2).map(d => (
-                    <div key={d} style={{ background: d===27 ? 'rgba(124,92,252,.08)' : '#18181f', border: d===27 ? '1px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:8, minHeight:72, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:12, color: d===27 ? '#7c5cfc' : '#8888aa', fontWeight: d===27 ? 700 : 500 }}>{d}</div>
-                      {d===14 && <div style={{ background:'rgba(225,48,108,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>💝 San Valentín</div>}
-                      {d===4 && <div style={{ background:'rgba(225,48,108,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>📸 Producto</div>}
-                      {d===7 && <div style={{ background:'rgba(24,119,242,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>📘 Reel</div>}
+                  {Array.from({length:24},(_,i)=>i+8).map(d => (
+                    <div key={d} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:8, minHeight:72, padding:6, cursor:'pointer' }}>
+                      <div style={{ fontSize:12, color:'#8888aa' }}>{d}</div>
+                      {d===10 && <div style={{ background:'rgba(225,48,108,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>📸 Post</div>}
+                      {d===15 && <div style={{ background:'rgba(24,119,242,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>📘 Reel</div>}
+                      {d===20 && <div style={{ background:'rgba(0,229,255,.15)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>🎵 TikTok</div>}
                     </div>
                   ))}
                 </div>
@@ -326,7 +351,6 @@ const [tone, setTone] = useState('Amigable');
           )}
         </main>
 
-        {/* RIGHT PANEL */}
         <aside style={{ borderLeft:'1px solid #2a2a38', padding:'24px 16px', overflowY:'auto' }}>
           <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Vista previa</div>
           <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
@@ -354,7 +378,6 @@ const [tone, setTone] = useState('Amigable');
         </aside>
       </div>
 
-      {/* PAYWALL MODAL */}
       {showModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center' }}
           onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
