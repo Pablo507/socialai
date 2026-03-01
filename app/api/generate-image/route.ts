@@ -6,9 +6,8 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    // Traducir prompt
+    // Traducir prompt al inglés con Groq
     let englishPrompt = prompt;
-
     try {
       const groqRes = await fetch(
         'https://api.groq.com/openai/v1/chat/completions',
@@ -23,14 +22,13 @@ export async function POST(request: Request) {
             messages: [
               {
                 role: 'user',
-                content: `Translate this image description to English. Reply ONLY with the translation: "${prompt}"`,
+                content: `Translate this image description to English. Reply ONLY with the translation, nothing else: "${prompt}"`,
               },
             ],
             max_tokens: 100,
           }),
         }
       );
-
       const groqData = await groqRes.json();
       englishPrompt =
         groqData.choices?.[0]?.message?.content?.trim() || prompt;
@@ -45,7 +43,9 @@ export async function POST(request: Request) {
       `${englishPrompt}, cinematic photography, dramatic lighting, professional`,
     ];
 
-    const imagePromises = styles.map(async (styledPrompt) => {
+    // Generar imágenes secuencialmente para mejores resultados
+    const images: string[] = [];
+    for (const styledPrompt of styles) {
       const response = await fetch(
         'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
         {
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({
             inputs: styledPrompt,
-            parameters: { num_inference_steps: 20},
+            parameters: { num_inference_steps: 4 },
           }),
         }
       );
@@ -68,10 +68,8 @@ export async function POST(request: Request) {
 
       const buffer = await response.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
-      return `data:image/jpeg;base64,${base64}`;
-    });
-
-    const images = await Promise.all(imagePromises);
+      images.push(`data:image/jpeg;base64,${base64}`);
+    }
 
     return Response.json({ images });
 
