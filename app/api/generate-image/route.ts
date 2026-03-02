@@ -34,30 +34,20 @@ export async function POST(request: Request) {
       `${englishPrompt}, professional photo, high quality, 4k, sharp focus, realistic`,
       `${englishPrompt}, digital art style, vibrant colors, detailed illustration`,
       `${englishPrompt}, minimalist style, clean white background, studio lighting`,
-      `${englishPrompt}, cinematic photography, dramatic lighting, professional`,
+      `${englishPrompt}, cinematic photography, dramatic lighting, bokeh`,
     ];
 
-    // Generar imágenes secuencialmente
     const images: string[] = [];
-    for (const styledPrompt of styles) {
-      const response = await fetch(
-        'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            inputs: styledPrompt,
-            parameters: { num_inference_steps: 4 },
-          }),
-        }
-      );
+
+    for (let i = 0; i < styles.length; i++) {
+      const encoded = encodeURIComponent(styles[i]);
+      const seed = Math.floor(Math.random() * 999999);
+      const url = `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&seed=${seed}&nologo=true&enhance=true`;
+
+      const response = await fetch(url, { method: 'GET' });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`HF Error: ${error}`);
+        throw new Error(`Pollinations error: ${response.status}`);
       }
 
       const buffer = await response.arrayBuffer();
