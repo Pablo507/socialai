@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     for (const styledPrompt of styles) {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${process.env.GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${process.env.GOOGLE_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -62,11 +62,9 @@ export async function POST(request: Request) {
       }
 
       const data = await response.json();
-      
-      // Buscar la parte de imagen en la respuesta
       const parts = data.candidates?.[0]?.content?.parts || [];
       const imagePart = parts.find((p: any) => p.inlineData);
-      
+
       if (!imagePart?.inlineData?.data) {
         throw new Error('No image returned from Gemini');
       }
