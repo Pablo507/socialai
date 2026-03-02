@@ -37,23 +37,12 @@ export async function POST(request: Request) {
       `${englishPrompt}, cinematic photography, dramatic lighting, bokeh`,
     ];
 
-    const images: string[] = [];
-
-    for (let i = 0; i < styles.length; i++) {
-      const encoded = encodeURIComponent(styles[i]);
+    // Devolver URLs directamente — el browser las carga sin pasar por el servidor
+    const images = styles.map((style, i) => {
+      const encoded = encodeURIComponent(style);
       const seed = Math.floor(Math.random() * 999999);
-      const url = `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&seed=${seed}&nologo=true&enhance=true`;
-
-      const response = await fetch(url, { method: 'GET' });
-
-      if (!response.ok) {
-        throw new Error(`Pollinations error: ${response.status}`);
-      }
-
-      const buffer = await response.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      images.push(`data:image/jpeg;base64,${base64}`);
-    }
+      return `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&seed=${seed}&nologo=true`;
+    });
 
     return Response.json({ images });
 
