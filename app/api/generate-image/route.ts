@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     for (const styledPrompt of styles) {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${process.env.GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-fast-generate-001:predict?key=${process.env.GOOGLE_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
