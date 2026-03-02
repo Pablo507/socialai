@@ -41,18 +41,16 @@ export async function POST(request: Request) {
 
     for (const styledPrompt of styles) {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${process.env.GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${process.env.GOOGLE_API_KEY}`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': `${process.env.GOOGLE_API_KEY}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            instances: [{ prompt: styledPrompt }],
-            parameters: {
-              sampleCount: 1,
-              aspectRatio: '1:1',
+            contents: [{
+              parts: [{ text: styledPrompt }]
+            }],
+            generationConfig: {
+              responseModalities: ['TEXT', 'IMAGE'],
             },
           }),
         }
@@ -60,13 +58,21 @@ export async function POST(request: Request) {
 
       if (!response.ok) {
         const err = await response.text();
-        throw new Error(`Google Imagen error: ${err}`);
+        throw new Error(`Gemini error: ${err}`);
       }
 
       const data = await response.json();
-      const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-      if (!b64) throw new Error('No image returned from Google');
-      images.push(`data:image/png;base64,${b64}`);
+      
+      // Buscar la parte de imagen en la respuesta
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const imagePart = parts.find((p: any) => p.inlineData);
+      
+      if (!imagePart?.inlineData?.data) {
+        throw new Error('No image returned from Gemini');
+      }
+
+      const mimeType = imagePart.inlineData.mimeType || 'image/png';
+      images.push(`data:${mimeType};base64,${imagePart.inlineData.data}`);
     }
 
     return Response.json({ images });
