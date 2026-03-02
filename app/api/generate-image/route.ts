@@ -37,12 +37,34 @@ export async function POST(request: Request) {
       `${englishPrompt}, cinematic photography, dramatic lighting, bokeh`,
     ];
 
-    // Devolver URLs directamente — el browser las carga sin pasar por el servidor
-    const images = styles.map((style, i) => {
-      const encoded = encodeURIComponent(style);
-      const seed = Math.floor(Math.random() * 999999);
-      return `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&seed=${seed}&nologo=true`;
-    });
+    const images: string[] = [];
+
+    for (const styledPrompt of styles) {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${process.env.GOOGLE_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt: styledPrompt }],
+            parameters: {
+              sampleCount: 1,
+              aspectRatio: '1:1',
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Google Imagen error: ${err}`);
+      }
+
+      const data = await response.json();
+      const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+      if (!b64) throw new Error('No image returned from Google');
+      images.push(`data:image/png;base64,${b64}`);
+    }
 
     return Response.json({ images });
 
@@ -51,3 +73,4 @@ export async function POST(request: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
