@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const [previewImage, setPreviewImage] = useState<string>('');
   const [showVideo, setShowVideo] = useState(false);
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
   const [user, setUser] = useState<any>(null);
@@ -75,6 +76,7 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.images) {
         setImages(data.images);
+        setPreviewImage('');
         setUsageCount(c => c + 1);
       } else {
         alert('Error generando imágenes: ' + data.error);
@@ -267,13 +269,17 @@ export default function DashboardPage() {
                 <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
                     <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Imágenes generadas</span>
-                    <button style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>⬇️ Descargar</button>
+                    <span style={{ fontSize:11, color:'#8888aa' }}>👆 Click en una imagen para previsualizar</span>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, padding:20 }}>
                     {images.map((src, i) => (
-                      <div key={i} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer' }}>
+                      <div key={i}
+                        onClick={() => setPreviewImage(src)}
+                        style={{ background:'#18181f', border: previewImage===src ? '2px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer', transition:'border .2s', boxShadow: previewImage===src ? '0 0 12px rgba(124,92,252,.4)' : 'none' }}>
                         <img src={src} alt={`Versión ${String.fromCharCode(65+i)}`} style={{ width:'100%', height:160, objectFit:'cover' }} />
-                        <div style={{ padding:'8px 12px', fontSize:12, color:'#8888aa' }}>Versión {String.fromCharCode(65+i)}</div>
+                        <div style={{ padding:'8px 12px', fontSize:12, color: previewImage===src ? '#7c5cfc' : '#8888aa', fontWeight: previewImage===src ? 600 : 400 }}>
+                          {previewImage===src ? '✓ ' : ''}Versión {String.fromCharCode(65+i)}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -352,6 +358,7 @@ export default function DashboardPage() {
           )}
         </main>
 
+        {/* RIGHT PANEL */}
         <aside style={{ borderLeft:'1px solid #2a2a38', padding:'24px 16px', overflowY:'auto' }}>
           <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Vista previa</div>
           <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
@@ -360,12 +367,34 @@ export default function DashboardPage() {
               <div style={{ fontSize:13, fontWeight:600 }}>@tuempresa</div>
               <div style={{ marginLeft:'auto', fontSize:10, color:'#8888aa', background:'#0a0a0f', padding:'2px 8px', borderRadius:4 }}>📘 FB</div>
             </div>
-            <div style={{ height:160, background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.1))', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36 }}>🖼️</div>
-            <div style={{ padding:12, fontSize:13, lineHeight:1.6, color:'#f0f0fa', minHeight:80 }}>{previewContent}</div>
+
+            {/* PREVIEW IMAGE AREA */}
+            <div style={{ height:180, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.1))', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {previewImage
+                ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Vista previa" />
+                : <span style={{ fontSize:36 }}>🖼️</span>
+              }
+              {previewImage && (
+                <button
+                  onClick={() => setPreviewImage('')}
+                  style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.6)', border:'none', color:'white', borderRadius:'50%', width:22, height:22, fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div style={{ padding:12, fontSize:13, lineHeight:1.6, color:'#f0f0fa', minHeight:80 }}>
+              {previewImage ? (
+                <span style={{ color:'#8888aa', fontSize:12 }}>
+                  🖼️ Imagen seleccionada · {images.findIndex(s => s === previewImage) >= 0 ? `Versión ${String.fromCharCode(65 + images.findIndex(s => s === previewImage))}` : ''}
+                </span>
+              ) : previewContent}
+            </div>
             <div style={{ padding:'10px 12px', borderTop:'1px solid #2a2a38', display:'flex', gap:12 }}>
               {['❤️','💬','↗️'].map(a => <span key={a} style={{ fontSize:12, color:'#8888aa' }}>{a}</span>)}
             </div>
           </div>
+
           <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Historial</div>
           {[{badge:'Copy',text:'☀️ ¡El verano llegó!',time:'hace 2h',color:'#7c5cfc'},{badge:'Imagen',text:'Producto fondo blanco',time:'ayer',color:'#e040fb'}].map(h => (
             <div key={h.badge} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:10, padding:12, marginBottom:8, cursor:'pointer' }}>
@@ -414,3 +443,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+    
