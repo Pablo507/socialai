@@ -1,12 +1,19 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 export async function POST(request: Request) {
   try {
-    const { prompt } = await request.json();
+    const { prompt, userId } = await request.json();
 
     if (!prompt) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    // Traducir prompt al inglés con Groq
+    // 1. Traducir prompt al inglés con Groq
     let englishPrompt = prompt;
     try {
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -39,38 +46,80 @@ export async function POST(request: Request) {
 
     const images: string[] = [];
 
-    for (const styledPrompt of styles) {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${process.env.GOOGLE_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: styledPrompt }]
-            }],
-            generationConfig: {
-              responseModalities: ['TEXT', 'IMAGE'],
-            },
-          }),
+    // 2. Generar cada imagen con Replicate
+    for (let i = 0; i < styles.length; i++) {
+      const styledPrompt = styles[i];
+
+      // Iniciar predicción
+      const predResponse = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'wait',
+        },
+        body: JSON.stringify({
+          input: {
+            prompt: styledPrompt,
+            num_outputs: 1,
+            aspect_ratio: '1:1',
+            output_format: 'webp',
+            output_quality: 80,
+          },
+        }),
+      });
+
+      if (!predResponse.ok) {
+        const err = await predResponse.text();
+        throw new Error(`Replicate error: ${err}`);
+      }
+
+      const prediction = await predResponse.json();
+
+      // Esperar resultado si no vino inmediato
+      let imageUrl = prediction.output?.[0];
+      if (!imageUrl) {
+        const pollUrl = prediction.urls?.get || `https://api.replicate.com/v1/predictions/${prediction.id}`;
+        for (let attempt = 0; attempt < 30; attempt++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const pollRes = await fetch(pollUrl, {
+            headers: { 'Authorization': `Bearer ${process.env.REPLICATE_API_TOKEN}` },
+          });
+          const pollData = await pollRes.json();
+          if (pollData.status === 'succeeded') {
+            imageUrl = pollData.output?.[0];
+            break;
+          }
+          if (pollData.status === 'failed') {
+            throw new Error('Replicate generation failed');
+          }
         }
-      );
-
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Gemini error: ${err}`);
       }
 
-      const data = await response.json();
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      const imagePart = parts.find((p: any) => p.inlineData);
+      if (!imageUrl) throw new Error('No image URL from Replicate');
 
-      if (!imagePart?.inlineData?.data) {
-        throw new Error('No image returned from Gemini');
-      }
+      // 3. Descargar imagen
+      const imgResponse = await fetch(imageUrl);
+      if (!imgResponse.ok) throw new Error('Failed to download image from Replicate');
+      const imgBuffer = await imgResponse.arrayBuffer();
 
-      const mimeType = imagePart.inlineData.mimeType || 'image/png';
-      images.push(`data:${mimeType};base64,${imagePart.inlineData.data}`);
+      // 4. Subir a Supabase Storage
+      const fileName = `${userId || 'anon'}/${Date.now()}-style${i}.webp`;
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(fileName, Buffer.from(imgBuffer), {
+          contentType: 'image/webp',
+          upsert: false,
+        });
+
+      if (uploadError) throw new Error(`Supabase upload error: ${uploadError.message}`);
+
+      // 5. Obtener URL pública
+      const { data: publicData } = supabase.storage
+        .from('images')
+        .getPublicUrl(fileName);
+
+      images.push(publicData.publicUrl);
     }
 
     return Response.json({ images });
@@ -80,4 +129,3 @@ export async function POST(request: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
-
