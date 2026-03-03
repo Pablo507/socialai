@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function DashboardPage() {
-  const [usageCount, setUsageCount] = useState(3);
+  const [usageCount, setUsageCount] = useState(0);
   const maxUsage = 10;
   const [activePanel, setActivePanel] = useState('copy');
   const [copyResult, setCopyResult] = useState('');
@@ -22,11 +22,25 @@ export default function DashboardPage() {
   const [industry, setIndustry] = useState('Restaurante / Gastronomía');
   const [goal, setGoal] = useState('Vender un producto');
   const [tone, setTone] = useState('Amigable');
+  const [history, setHistory] = useState<any[]>([]);
+  const [selectedPost, setSelectedPost] = useState<any>(null);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      if (data.user) loadHistory(data.user.id);
+    });
   }, []);
+
+  async function loadHistory(userId: string) {
+    try {
+      const res = await fetch(`/api/get-history?userId=${userId}`);
+      const data = await res.json();
+      setHistory(data.posts || []);
+      setUsageCount(data.posts?.length || 0);
+    } catch {}
+  }
 
   function checkUsage() {
     if (usageCount >= maxUsage) { setShowModal(true); return true; }
@@ -47,13 +61,22 @@ export default function DashboardPage() {
       const res = await fetch('/api/generate-copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms }),
+        body: JSON.stringify({
+          prompt: copyPrompt,
+          industry,
+          goal,
+          tone,
+          platforms: selectedPlatforms,
+          userId: user?.id,
+          imageUrl: previewImage || null,
+        }),
       });
       const data = await res.json();
       if (data.copy) {
         setCopyResult(data.copy);
         setPreviewContent(data.copy.substring(0, 150) + '...');
         setUsageCount(c => c + 1);
+        if (user) loadHistory(user.id);
       } else {
         alert('Error: ' + data.error);
       }
@@ -67,17 +90,19 @@ export default function DashboardPage() {
     if (checkUsage()) return;
     const prompt = imagePrompt.trim() || 'producto profesional fondo blanco';
     setImageLoading(true);
+    setImages([]);
+    setPreviewImage('');
     try {
       const res = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, userId: user?.id }),
       });
       const data = await res.json();
       if (data.images) {
         setImages(data.images);
-        setPreviewImage('');
         setUsageCount(c => c + 1);
+        if (user) loadHistory(user.id);
       } else {
         alert('Error generando imágenes: ' + data.error);
       }
@@ -96,6 +121,18 @@ export default function DashboardPage() {
     setVideoLoading(false);
   }
 
+  function loadPost(post: any) {
+    if (post.copy_text) {
+      setCopyResult(post.copy_text);
+      setPreviewContent(post.copy_text.substring(0, 150) + '...');
+      setActivePanel('copy');
+    }
+    if (post.image_url) {
+      setPreviewImage(post.image_url);
+    }
+    setSelectedPost(post);
+  }
+
   const remaining = maxUsage - usageCount;
   const platformColors: Record<string, string> = {
     'Facebook': '#1877f2',
@@ -107,6 +144,7 @@ export default function DashboardPage() {
     <div style={{ fontFamily: 'system-ui,sans-serif', background: '#0a0a0f', color: '#f0f0fa', minHeight: '100vh' }}>
       <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
 
+      {/* NAV */}
       <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 32px', borderBottom:'1px solid #2a2a38', background:'rgba(10,10,15,0.9)', position:'sticky', top:0, zIndex:100 }}>
         <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -128,6 +166,7 @@ export default function DashboardPage() {
         </div>
       </nav>
 
+      {/* USAGE BAR */}
       <div style={{ padding:'10px 32px', background:'#111118', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', gap:16 }}>
         <span style={{ fontSize:12, color:'#8888aa' }}>Uso gratuito</span>
         <div style={{ flex:1, height:6, background:'#2a2a38', borderRadius:3, overflow:'hidden' }}>
@@ -136,8 +175,10 @@ export default function DashboardPage() {
         <span style={{ fontSize:12, color:'#8888aa' }}><strong style={{ color:'#e040fb' }}>{usageCount}</strong> / {maxUsage}</span>
       </div>
 
+      {/* LAYOUT */}
       <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 280px', minHeight:'calc(100vh - 100px)' }}>
 
+        {/* SIDEBAR */}
         <aside style={{ borderRight:'1px solid #2a2a38', padding:'24px 12px' }}>
           {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
@@ -152,8 +193,10 @@ export default function DashboardPage() {
           </div>
         </aside>
 
+        {/* MAIN */}
         <main style={{ padding:32, overflowY:'auto' }}>
 
+          {/* COPYWRITING */}
           {activePanel === 'copy' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>✍️ Generador de Copywriting</h1>
@@ -233,10 +276,11 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* IMAGES */}
           {activePanel === 'images' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🖼️ Generador de Imágenes</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea imágenes únicas con IA</p>
+              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea imágenes únicas con IA · guardadas automáticamente</p>
               <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
                 <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Descripción</label>
                 <textarea
@@ -262,14 +306,14 @@ export default function DashboardPage() {
                 </div>
                 <button onClick={generateImages} disabled={imageLoading}
                   style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: imageLoading ? 0.7 : 1 }}>
-                  {imageLoading ? '⏳ Generando imágenes (~40s)...' : '🎨 Generar 4 Imágenes'}
+                  {imageLoading ? '⏳ Generando y guardando imágenes...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
               {images.length > 0 && (
                 <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
-                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Imágenes generadas</span>
-                    <span style={{ fontSize:11, color:'#8888aa' }}>👆 Click en una imagen para previsualizar</span>
+                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Imágenes generadas y guardadas</span>
+                    <span style={{ fontSize:11, color:'#8888aa' }}>👆 Click para previsualizar</span>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, padding:20 }}>
                     {images.map((src, i) => (
@@ -288,6 +332,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* VIDEOS */}
           {activePanel === 'videos' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🎬 Generador de Videos</h1>
@@ -329,6 +374,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* CALENDAR */}
           {activePanel === 'calendar' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>📅 Calendario Editorial</h1>
@@ -365,49 +411,61 @@ export default function DashboardPage() {
             <div style={{ background:'#111118', padding:'10px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid #2a2a38' }}>
               <div style={{ width:28, height:28, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>👤</div>
               <div style={{ fontSize:13, fontWeight:600 }}>@tuempresa</div>
-              <div style={{ marginLeft:'auto', fontSize:10, color:'#8888aa', background:'#0a0a0f', padding:'2px 8px', borderRadius:4 }}>📘 FB</div>
+              <div style={{ marginLeft:'auto', fontSize:10, color:'#8888aa', background:'#0a0a0f', padding:'2px 8px', borderRadius:4 }}>
+                {selectedPlatforms[0] === 'Instagram' ? '📸 IG' : selectedPlatforms[0] === 'TikTok' ? '🎵 TT' : '📘 FB'}
+              </div>
             </div>
-
-            {/* PREVIEW IMAGE AREA */}
             <div style={{ height:180, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.1))', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {previewImage
                 ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Vista previa" />
                 : <span style={{ fontSize:36 }}>🖼️</span>
               }
               {previewImage && (
-                <button
-                  onClick={() => setPreviewImage('')}
+                <button onClick={() => setPreviewImage('')}
                   style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.6)', border:'none', color:'white', borderRadius:'50%', width:22, height:22, fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   ✕
                 </button>
               )}
             </div>
-
             <div style={{ padding:12, fontSize:13, lineHeight:1.6, color:'#f0f0fa', minHeight:80 }}>
-              {previewImage ? (
-                <span style={{ color:'#8888aa', fontSize:12 }}>
-                  🖼️ Imagen seleccionada · {images.findIndex(s => s === previewImage) >= 0 ? `Versión ${String.fromCharCode(65 + images.findIndex(s => s === previewImage))}` : ''}
-                </span>
-              ) : previewContent}
+              {previewImage && !copyResult
+                ? <span style={{ color:'#8888aa', fontSize:12 }}>🖼️ Imagen lista · Generá un copy para completar el post</span>
+                : previewContent
+              }
             </div>
             <div style={{ padding:'10px 12px', borderTop:'1px solid #2a2a38', display:'flex', gap:12 }}>
               {['❤️','💬','↗️'].map(a => <span key={a} style={{ fontSize:12, color:'#8888aa' }}>{a}</span>)}
             </div>
           </div>
 
-          <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Historial</div>
-          {[{badge:'Copy',text:'☀️ ¡El verano llegó!',time:'hace 2h',color:'#7c5cfc'},{badge:'Imagen',text:'Producto fondo blanco',time:'ayer',color:'#e040fb'}].map(h => (
-            <div key={h.badge} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:10, padding:12, marginBottom:8, cursor:'pointer' }}>
+          {/* HISTORIAL REAL */}
+          <div style={{ fontSize:11, fontWeight:700, marginBottom:12, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Historial</div>
+          {history.length === 0 && (
+            <div style={{ fontSize:12, color:'#4a4a5a', textAlign:'center', padding:'16px 0' }}>Sin historial aún</div>
+          )}
+          {history.slice(0, 10).map((post) => (
+            <div key={post.id} onClick={() => loadPost(post)}
+              style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:10, padding:12, marginBottom:8, cursor:'pointer' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                <span style={{ fontSize:10, padding:'2px 8px', borderRadius:4, fontWeight:600, background:`${h.color}33`, color:h.color }}>{h.badge}</span>
-                <span style={{ fontSize:11, color:'#8888aa', marginLeft:'auto' }}>{h.time}</span>
+                <span style={{ fontSize:10, padding:'2px 8px', borderRadius:4, fontWeight:600, background: post.image_url ? '#e040fb33' : '#7c5cfc33', color: post.image_url ? '#e040fb' : '#7c5cfc' }}>
+                  {post.image_url ? 'Imagen' : 'Copy'}
+                </span>
+                <span style={{ fontSize:11, color:'#8888aa', marginLeft:'auto' }}>
+                  {new Date(post.created_at).toLocaleDateString('es-UY', { day:'2-digit', month:'short' })}
+                </span>
               </div>
-              <div style={{ fontSize:12, color:'#8888aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{h.text}</div>
+              {post.image_url && (
+                <img src={post.image_url} alt="" style={{ width:'100%', height:60, objectFit:'cover', borderRadius:6, marginBottom:6 }} />
+              )}
+              <div style={{ fontSize:12, color:'#8888aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {post.copy_text ? post.copy_text.substring(0, 50) + '...' : post.prompt}
+              </div>
             </div>
           ))}
         </aside>
       </div>
 
+      {/* PAYWALL MODAL */}
       {showModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center' }}
           onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
@@ -443,4 +501,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-    
