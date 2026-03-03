@@ -1,3 +1,5 @@
+export const maxDuration = 60; // Vercel max duration en segundos
+
 export async function POST(request: Request) {
   try {
     const { prompt } = await request.json();
@@ -37,10 +39,8 @@ export async function POST(request: Request) {
       `${englishPrompt}, cinematic photography, dramatic lighting, bokeh`,
     ];
 
-    const images: string[] = [];
-
-    for (const styledPrompt of styles) {
-      // Generar con Fal.ai
+    // 2. Generar las 4 imágenes EN PARALELO
+    const imagePromises = styles.map(async (styledPrompt) => {
       const falRes = await fetch('https://fal.run/fal-ai/flux/schnell', {
         method: 'POST',
         headers: {
@@ -65,14 +65,17 @@ export async function POST(request: Request) {
       const imageUrl = falData.images?.[0]?.url;
       if (!imageUrl) throw new Error('No image URL from Fal.ai');
 
-      // Descargar imagen y convertir a base64
+      // Descargar y convertir a base64
       const imgRes = await fetch(imageUrl);
       if (!imgRes.ok) throw new Error('Failed to download image');
       const buffer = await imgRes.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
       const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-      images.push(`data:${contentType};base64,${base64}`);
-    }
+      return `data:${contentType};base64,${base64}`;
+    });
+
+    // Esperar todas en paralelo
+    const images = await Promise.all(imagePromises);
 
     return Response.json({ images });
 
