@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       // 4. Subir a Supabase Storage
       const fileName = `${userId || 'anon'}/${Date.now()}-style${i}.webp`;
       const { error: uploadError } = await supabase.storage
-        .from('images')
+        .from('Images')
         .upload(fileName, Buffer.from(imgBuffer), {
           contentType: 'image/webp',
           upsert: false,
