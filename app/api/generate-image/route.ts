@@ -1,13 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(request: Request) {
   try {
-    const { prompt, userId } = await request.json();
+    const { prompt } = await request.json();
 
     if (!prompt) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
@@ -46,10 +39,8 @@ export async function POST(request: Request) {
 
     const images: string[] = [];
 
-    // 2. Generar cada imagen con Fal.ai FLUX Schnell
-    for (let i = 0; i < styles.length; i++) {
-      const styledPrompt = styles[i];
-
+    for (const styledPrompt of styles) {
+      // Generar con Fal.ai
       const falRes = await fetch('https://fal.run/fal-ai/flux/schnell', {
         method: 'POST',
         headers: {
@@ -72,31 +63,15 @@ export async function POST(request: Request) {
 
       const falData = await falRes.json();
       const imageUrl = falData.images?.[0]?.url;
-
       if (!imageUrl) throw new Error('No image URL from Fal.ai');
 
-      // 3. Descargar imagen
-      const imgResponse = await fetch(imageUrl);
-      if (!imgResponse.ok) throw new Error('Failed to download image from Fal.ai');
-      const imgBuffer = await imgResponse.arrayBuffer();
-
-      // 4. Subir a Supabase Storage
-      const fileName = `${userId || 'anon'}/${Date.now()}-style${i}.webp`;
-      const { error: uploadError } = await supabase.storage
-        .from('Images')
-        .upload(fileName, Buffer.from(imgBuffer), {
-          contentType: 'image/webp',
-          upsert: false,
-        });
-
-      if (uploadError) throw new Error(`Supabase upload error: ${uploadError.message}`);
-
-      // 5. Obtener URL pública
-      const { data: publicData } = supabase.storage
-        .from('images')
-        .getPublicUrl(fileName);
-
-      images.push(publicData.publicUrl);
+      // Descargar imagen y convertir a base64
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) throw new Error('Failed to download image');
+      const buffer = await imgRes.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      images.push(`data:${contentType};base64,${base64}`);
     }
 
     return Response.json({ images });
