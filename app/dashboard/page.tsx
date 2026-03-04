@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function DashboardPage() {
@@ -9,11 +9,9 @@ export default function DashboardPage() {
   const [copyResult, setCopyResult] = useState('');
   const [copyLoading, setCopyLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
-  const [videoLoading, setVideoLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
-  const [showVideo, setShowVideo] = useState(false);
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
   const [user, setUser] = useState<any>(null);
   const [imagePrompt, setImagePrompt] = useState('');
@@ -23,7 +21,14 @@ export default function DashboardPage() {
   const [goal, setGoal] = useState('Vender un producto');
   const [tone, setTone] = useState('Amigable');
   const [history, setHistory] = useState<any[]>([]);
-  const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [shareToast, setShareToast] = useState('');
+
+  // Video states
+  const [videoPrompt, setVideoPrompt] = useState('');
+  const [videoStatus, setVideoStatus] = useState<'idle' | 'processing' | 'completed' | 'failed'>('idle');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoQueuePosition, setVideoQueuePosition] = useState<number | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -31,6 +36,7 @@ export default function DashboardPage() {
       setUser(data.user);
       if (data.user) loadHistory(data.user.id);
     });
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
 
   async function loadHistory(userId: string) {
@@ -53,6 +59,66 @@ export default function DashboardPage() {
     );
   }
 
+  function showToast(msg: string) {
+    setShareToast(msg);
+    setTimeout(() => setShareToast(''), 3000);
+  }
+
+  // SHARE FUNCTIONS
+  async function shareNative() {
+    const text = copyResult || previewContent;
+    if (navigator.share) {
+      try {
+        const shareData: ShareData = { text };
+        if (previewImage && previewImage.startsWith('http')) {
+          shareData.url = previewImage;
+        }
+        await navigator.share(shareData);
+        showToast('✅ Compartido exitosamente');
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(text);
+      showToast('📋 Texto copiado al portapapeles');
+    }
+  }
+
+  function shareToFacebook() {
+    const text = encodeURIComponent(copyResult || previewContent);
+    window.open(`https://www.facebook.com/sharer/sharer.php?quote=${text}`, '_blank', 'width=600,height=400');
+    showToast('📘 Abriendo Facebook...');
+  }
+
+  function shareToTwitter() {
+    const text = encodeURIComponent((copyResult || previewContent).substring(0, 280));
+    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'width=600,height=400');
+    showToast('🐦 Abriendo Twitter/X...');
+  }
+
+  function shareToWhatsApp() {
+    const text = encodeURIComponent(copyResult || previewContent);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+    showToast('💬 Abriendo WhatsApp...');
+  }
+
+  async function downloadImage() {
+    if (!previewImage) { showToast('⚠️ Seleccioná una imagen primero'); return; }
+    try {
+      const link = document.createElement('a');
+      link.href = previewImage;
+      link.download = `socialai-imagen-${Date.now()}.jpg`;
+      link.click();
+      showToast('⬇️ Descargando imagen...');
+    } catch {
+      showToast('❌ Error al descargar');
+    }
+  }
+
+  async function copyTextToClipboard() {
+    const text = copyResult || previewContent;
+    await navigator.clipboard.writeText(text);
+    showToast('📋 Texto copiado');
+  }
+
   async function generateCopy() {
     if (checkUsage()) return;
     if (!copyPrompt.trim()) { alert('Describí tu producto o idea'); return; }
@@ -62,12 +128,8 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: copyPrompt,
-          industry,
-          goal,
-          tone,
-          platforms: selectedPlatforms,
-          userId: user?.id,
+          prompt: copyPrompt, industry, goal, tone,
+          platforms: selectedPlatforms, userId: user?.id,
           imageUrl: previewImage || null,
         }),
       });
@@ -77,12 +139,8 @@ export default function DashboardPage() {
         setPreviewContent(data.copy.substring(0, 150) + '...');
         setUsageCount(c => c + 1);
         if (user) loadHistory(user.id);
-      } else {
-        alert('Error: ' + data.error);
-      }
-    } catch (e) {
-      alert('Error de conexión');
-    }
+      } else { alert('Error: ' + data.error); }
+    } catch { alert('Error de conexión'); }
     setCopyLoading(false);
   }
 
@@ -103,22 +161,52 @@ export default function DashboardPage() {
         setImages(data.images);
         setUsageCount(c => c + 1);
         if (user) loadHistory(user.id);
-      } else {
-        alert('Error generando imágenes: ' + data.error);
-      }
-    } catch (e) {
-      alert('Error de conexión');
-    }
+      } else { alert('Error generando imágenes: ' + data.error); }
+    } catch { alert('Error de conexión'); }
     setImageLoading(false);
   }
 
   async function generateVideo() {
     if (checkUsage()) return;
-    setVideoLoading(true);
-    await new Promise(r => setTimeout(r, 3000));
-    setShowVideo(true);
-    setUsageCount(c => c + 1);
-    setVideoLoading(false);
+    if (!videoPrompt.trim()) { alert('Describí tu idea de video'); return; }
+    setVideoStatus('processing');
+    setVideoUrl('');
+    setVideoQueuePosition(null);
+    try {
+      const res = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: videoPrompt }),
+      });
+      const data = await res.json();
+      if (data.requestId) {
+        setUsageCount(c => c + 1);
+        startPolling(data.requestId);
+      } else {
+        setVideoStatus('failed');
+        alert('Error: ' + data.error);
+      }
+    } catch { setVideoStatus('failed'); alert('Error de conexión'); }
+  }
+
+  function startPolling(requestId: string) {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/video-status?requestId=${requestId}`);
+        const data = await res.json();
+        if (data.status === 'completed' && data.videoUrl) {
+          setVideoUrl(data.videoUrl);
+          setVideoStatus('completed');
+          if (pollingRef.current) clearInterval(pollingRef.current);
+        } else if (data.status === 'failed') {
+          setVideoStatus('failed');
+          if (pollingRef.current) clearInterval(pollingRef.current);
+        } else {
+          setVideoQueuePosition(data.queuePosition ?? null);
+        }
+      } catch {}
+    }, 5000);
   }
 
   function loadPost(post: any) {
@@ -127,22 +215,25 @@ export default function DashboardPage() {
       setPreviewContent(post.copy_text.substring(0, 150) + '...');
       setActivePanel('copy');
     }
-    if (post.image_url) {
-      setPreviewImage(post.image_url);
-    }
-    setSelectedPost(post);
+    if (post.image_url) setPreviewImage(post.image_url);
   }
 
   const remaining = maxUsage - usageCount;
+  const hasContent = copyResult || previewImage;
   const platformColors: Record<string, string> = {
-    'Facebook': '#1877f2',
-    'Instagram': '#e1306c',
-    'TikTok': '#00e5ff'
+    'Facebook': '#1877f2', 'Instagram': '#e1306c', 'TikTok': '#00e5ff'
   };
 
   return (
     <div style={{ fontFamily: 'system-ui,sans-serif', background: '#0a0a0f', color: '#f0f0fa', minHeight: '100vh' }}>
       <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+
+      {/* TOAST */}
+      {shareToast && (
+        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:'#18181f', border:'1px solid #2a2a38', borderRadius:12, padding:'10px 20px', fontSize:14, color:'#f0f0fa', zIndex:999, boxShadow:'0 4px 20px rgba(0,0,0,.5)', whiteSpace:'nowrap' }}>
+          {shareToast}
+        </div>
+      )}
 
       {/* NAV */}
       <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 32px', borderBottom:'1px solid #2a2a38', background:'rgba(10,10,15,0.9)', position:'sticky', top:0, zIndex:100 }}>
@@ -154,13 +245,11 @@ export default function DashboardPage() {
           {user
             ? <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ fontSize:14, color:'#8888aa' }}>👤 {user.email}</span>
-                <button onClick={async () => {
-                  const supabase = createClient();
-                  await supabase.auth.signOut();
-                  window.location.href = '/auth/login';
-                }} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
+                <button onClick={async () => { const s = createClient(); await s.auth.signOut(); window.location.href = '/auth/login'; }}
+                  style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
               </div>
-            : <button onClick={() => window.location.href='/auth/login'} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14 }}>Iniciar sesión</button>
+            : <button onClick={() => window.location.href='/auth/login'}
+                style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14 }}>Iniciar sesión</button>
           }
           <button onClick={() => setShowModal(true)} style={{ background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14, fontWeight:500 }}>Upgrade Pro</button>
         </div>
@@ -196,7 +285,6 @@ export default function DashboardPage() {
         {/* MAIN */}
         <main style={{ padding:32, overflowY:'auto' }}>
 
-          {/* COPYWRITING */}
           {activePanel === 'copy' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>✍️ Generador de Copywriting</h1>
@@ -208,12 +296,8 @@ export default function DashboardPage() {
                     {[['📘 Facebook','Facebook'],['📸 Instagram','Instagram'],['🎵 TikTok','TikTok']].map(([label, name]) => {
                       const active = selectedPlatforms.includes(name);
                       const color = platformColors[name];
-                      return (
-                        <button key={name} onClick={() => togglePlatform(name)}
-                          style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active ? color : '#2a2a38'}`, background: active ? `${color}22` : 'transparent', color: active ? color : '#8888aa', fontSize:13, cursor:'pointer' }}>
-                          {label}
-                        </button>
-                      );
+                      return <button key={name} onClick={() => togglePlatform(name)}
+                        style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active ? color : '#2a2a38'}`, background: active ? `${color}22` : 'transparent', color: active ? color : '#8888aa', fontSize:13, cursor:'pointer' }}>{label}</button>;
                     })}
                   </div>
                 </div>
@@ -246,13 +330,9 @@ export default function DashboardPage() {
                 </div>
                 <div style={{ marginBottom:14 }}>
                   <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Describe tu producto o idea</label>
-                  <textarea
-                    value={copyPrompt}
-                    onChange={e => setCopyPrompt(e.target.value)}
+                  <textarea value={copyPrompt} onChange={e => setCopyPrompt(e.target.value)}
                     style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none' }}
-                    rows={3}
-                    placeholder="Ej: Auriculares Sony negros con carga rápida, precio $2500..."
-                  />
+                    rows={3} placeholder="Ej: Auriculares Sony negros con carga rápida, precio $2500..." />
                 </div>
                 <button onClick={generateCopy} disabled={copyLoading}
                   style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: copyLoading ? 0.7 : 1 }}>
@@ -276,20 +356,15 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* IMAGES */}
           {activePanel === 'images' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🖼️ Generador de Imágenes</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea imágenes únicas con IA · guardadas automáticamente</p>
+              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea imágenes únicas con IA</p>
               <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
                 <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Descripción</label>
-                <textarea
-                  value={imagePrompt}
-                  onChange={e => setImagePrompt(e.target.value)}
+                <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
                   style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }}
-                  rows={3}
-                  placeholder="Ej: niño feliz comiendo helado, parque soleado..."
-                />
+                  rows={3} placeholder="Ej: niño feliz comiendo helado, parque soleado..." />
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
                   <div>
                     <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Formato</label>
@@ -306,20 +381,19 @@ export default function DashboardPage() {
                 </div>
                 <button onClick={generateImages} disabled={imageLoading}
                   style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: imageLoading ? 0.7 : 1 }}>
-                  {imageLoading ? '⏳ Generando y guardando imágenes...' : '🎨 Generar 4 Imágenes'}
+                  {imageLoading ? '⏳ Generando imágenes (~10s)...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
               {images.length > 0 && (
                 <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
-                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Imágenes generadas y guardadas</span>
+                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Imágenes generadas</span>
                     <span style={{ fontSize:11, color:'#8888aa' }}>👆 Click para previsualizar</span>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, padding:20 }}>
                     {images.map((src, i) => (
-                      <div key={i}
-                        onClick={() => setPreviewImage(src)}
-                        style={{ background:'#18181f', border: previewImage===src ? '2px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer', transition:'border .2s', boxShadow: previewImage===src ? '0 0 12px rgba(124,92,252,.4)' : 'none' }}>
+                      <div key={i} onClick={() => setPreviewImage(src)}
+                        style={{ background:'#18181f', border: previewImage===src ? '2px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer', boxShadow: previewImage===src ? '0 0 12px rgba(124,92,252,.4)' : 'none' }}>
                         <img src={src} alt={`Versión ${String.fromCharCode(65+i)}`} style={{ width:'100%', height:160, objectFit:'cover' }} />
                         <div style={{ padding:'8px 12px', fontSize:12, color: previewImage===src ? '#7c5cfc' : '#8888aa', fontWeight: previewImage===src ? 600 : 400 }}>
                           {previewImage===src ? '✓ ' : ''}Versión {String.fromCharCode(65+i)}
@@ -332,49 +406,70 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* VIDEOS */}
           {activePanel === 'videos' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🎬 Generador de Videos</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea videos cortos para TikTok, Reels e Instagram Stories</p>
+              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea videos cortos para TikTok, Reels e Instagram Stories con IA</p>
               <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
-                <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Guión / idea del video</label>
-                <textarea style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }} rows={3} placeholder="Ej: Tutorial de 3 pasos para el outfit perfecto..." />
+                <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Describe tu video</label>
+                <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)}
+                  style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }}
+                  rows={3} placeholder="Ej: producto de belleza girando sobre fondo blanco con efecto de luz..." />
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
                   <div>
                     <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Formato</label>
                     <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
-                      <option>📱 Short/Reel (15s)</option><option>📱 TikTok (30s)</option><option>📹 Story (15s)</option>
+                      <option>📱 Vertical 9:16 (Reels/TikTok)</option><option>⬜ Cuadrado 1:1</option><option>🖥️ Horizontal 16:9</option>
                     </select>
                   </div>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Música</label>
+                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Duración</label>
                     <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
-                      <option>🎵 Auto</option><option>🔥 Trending TikTok</option><option>😌 Lo-fi</option><option>⚡ Energético</option>
+                      <option>5 segundos</option><option>10 segundos</option>
                     </select>
                   </div>
                 </div>
-                <button onClick={generateVideo} disabled={videoLoading}
-                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: videoLoading ? 0.7 : 1 }}>
-                  {videoLoading ? '⏳ Procesando video...' : '🎬 Generar Video'}
+                <button onClick={generateVideo} disabled={videoStatus === 'processing'}
+                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor: videoStatus==='processing' ? 'not-allowed' : 'pointer', opacity: videoStatus==='processing' ? 0.7 : 1 }}>
+                  {videoStatus === 'processing' ? '⏳ Generando video...' : '🎬 Generar Video con IA'}
                 </button>
               </div>
-              {showVideo && (
+              {videoStatus === 'processing' && (
+                <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:32, textAlign:'center' }}>
+                  <div style={{ fontSize:40, marginBottom:12 }}>⏳</div>
+                  <div style={{ fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:600, marginBottom:8 }}>Generando tu video con IA...</div>
+                  <div style={{ fontSize:13, color:'#8888aa', marginBottom:16 }}>
+                    {videoQueuePosition !== null ? `Posición en cola: #${videoQueuePosition} · ` : ''}puede tardar 30-60 segundos
+                  </div>
+                  <div style={{ height:4, background:'#2a2a38', borderRadius:2, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:'60%', background:'linear-gradient(90deg,#7c5cfc,#e040fb)', borderRadius:2 }} />
+                  </div>
+                </div>
+              )}
+              {videoStatus === 'completed' && videoUrl && (
                 <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
                     <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Video generado</span>
-                    <button style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>⬇️ Descargar MP4</button>
+                    <a href={videoUrl} download target="_blank" rel="noreferrer"
+                      style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer', textDecoration:'none' }}>⬇️ Descargar MP4</a>
                   </div>
-                  <div style={{ padding:40, textAlign:'center', color:'#8888aa' }}>
-                    <div style={{ fontSize:48, marginBottom:8 }}>▶️</div>
-                    <p>Video listo para descargar</p>
+                  <div style={{ padding:20 }}>
+                    <video controls style={{ width:'100%', borderRadius:10, maxHeight:400 }}>
+                      <source src={videoUrl} type="video/mp4" />
+                    </video>
                   </div>
+                </div>
+              )}
+              {videoStatus === 'failed' && (
+                <div style={{ background:'rgba(255,50,50,.08)', border:'1px solid rgba(255,50,50,.2)', borderRadius:16, padding:24, textAlign:'center' }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>❌</div>
+                  <div style={{ fontSize:14, color:'#ff6666' }}>Error generando el video. Intentá de nuevo.</div>
+                  <button onClick={() => setVideoStatus('idle')} style={{ marginTop:12, padding:'8px 20px', borderRadius:8, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', cursor:'pointer', fontSize:13 }}>Reintentar</button>
                 </div>
               )}
             </div>
           )}
 
-          {/* CALENDAR */}
           {activePanel === 'calendar' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>📅 Calendario Editorial</h1>
@@ -407,7 +502,9 @@ export default function DashboardPage() {
         {/* RIGHT PANEL */}
         <aside style={{ borderLeft:'1px solid #2a2a38', padding:'24px 16px', overflowY:'auto' }}>
           <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Vista previa</div>
-          <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
+
+          {/* MOCK POST */}
+          <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden', marginBottom:12 }}>
             <div style={{ background:'#111118', padding:'10px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid #2a2a38' }}>
               <div style={{ width:28, height:28, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>👤</div>
               <div style={{ fontSize:13, fontWeight:600 }}>@tuempresa</div>
@@ -415,35 +512,69 @@ export default function DashboardPage() {
                 {selectedPlatforms[0] === 'Instagram' ? '📸 IG' : selectedPlatforms[0] === 'TikTok' ? '🎵 TT' : '📘 FB'}
               </div>
             </div>
-            <div style={{ height:180, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.1))', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ height:160, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.1))', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {previewImage
                 ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Vista previa" />
                 : <span style={{ fontSize:36 }}>🖼️</span>
               }
               {previewImage && (
                 <button onClick={() => setPreviewImage('')}
-                  style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.6)', border:'none', color:'white', borderRadius:'50%', width:22, height:22, fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  ✕
-                </button>
+                  style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.6)', border:'none', color:'white', borderRadius:'50%', width:22, height:22, fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               )}
             </div>
-            <div style={{ padding:12, fontSize:13, lineHeight:1.6, color:'#f0f0fa', minHeight:80 }}>
-              {previewImage && !copyResult
-                ? <span style={{ color:'#8888aa', fontSize:12 }}>🖼️ Imagen lista · Generá un copy para completar el post</span>
-                : previewContent
-              }
+            <div style={{ padding:12, fontSize:12, lineHeight:1.6, color: hasContent ? '#f0f0fa' : '#4a4a5a', minHeight:60 }}>
+              {hasContent ? (copyResult || previewContent).substring(0, 120) + '...' : 'Generá contenido para ver la preview...'}
             </div>
-            <div style={{ padding:'10px 12px', borderTop:'1px solid #2a2a38', display:'flex', gap:12 }}>
+            <div style={{ padding:'8px 12px', borderTop:'1px solid #2a2a38', display:'flex', gap:12 }}>
               {['❤️','💬','↗️'].map(a => <span key={a} style={{ fontSize:12, color:'#8888aa' }}>{a}</span>)}
             </div>
           </div>
 
-          {/* HISTORIAL REAL */}
+          {/* PUBLISH BUTTONS */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, marginBottom:10, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Publicar</div>
+
+            {/* BOTÓN PRINCIPAL - COMPARTIR NATIVO */}
+            <button onClick={shareNative}
+              style={{ width:'100%', background: hasContent ? 'linear-gradient(135deg,#7c5cfc,#e040fb)' : '#2a2a38', border:'none', color: hasContent ? 'white' : '#4a4a5a', padding:'11px 14px', borderRadius:10, fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, cursor: hasContent ? 'pointer' : 'not-allowed', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              📱 Compartir ahora
+            </button>
+
+            {/* BOTONES POR RED SOCIAL */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
+              <button onClick={shareToFacebook}
+                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #1877f233', background:'#1877f211', color: hasContent ? '#1877f2' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+                📘 Facebook
+              </button>
+              <button onClick={shareToTwitter}
+                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #1d9bf033', background:'#1d9bf011', color: hasContent ? '#1d9bf0' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+                🐦 Twitter/X
+              </button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+              <button onClick={shareToWhatsApp}
+                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #25d36633', background:'#25d36611', color: hasContent ? '#25d366' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+                💬 WhatsApp
+              </button>
+              <button onClick={downloadImage}
+                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #2a2a38', background:'transparent', color: previewImage ? '#8888aa' : '#4a4a5a', fontSize:12, cursor: previewImage ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+                ⬇️ Imagen
+              </button>
+            </div>
+
+            {!hasContent && (
+              <div style={{ fontSize:11, color:'#4a4a5a', textAlign:'center', marginTop:8 }}>
+                Generá un copy o imagen para publicar
+              </div>
+            )}
+          </div>
+
+          {/* HISTORIAL */}
           <div style={{ fontSize:11, fontWeight:700, marginBottom:12, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Historial</div>
           {history.length === 0 && (
             <div style={{ fontSize:12, color:'#4a4a5a', textAlign:'center', padding:'16px 0' }}>Sin historial aún</div>
           )}
-          {history.slice(0, 10).map((post) => (
+          {history.slice(0, 8).map((post) => (
             <div key={post.id} onClick={() => loadPost(post)}
               style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:10, padding:12, marginBottom:8, cursor:'pointer' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
@@ -455,10 +586,10 @@ export default function DashboardPage() {
                 </span>
               </div>
               {post.image_url && (
-                <img src={post.image_url} alt="" style={{ width:'100%', height:60, objectFit:'cover', borderRadius:6, marginBottom:6 }} />
+                <img src={post.image_url} alt="" style={{ width:'100%', height:50, objectFit:'cover', borderRadius:6, marginBottom:6 }} />
               )}
               <div style={{ fontSize:12, color:'#8888aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {post.copy_text ? post.copy_text.substring(0, 50) + '...' : post.prompt}
+                {post.copy_text ? post.copy_text.substring(0, 45) + '...' : post.prompt}
               </div>
             </div>
           ))}
