@@ -1,13 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(request: Request) {
   try {
-    const { prompt, industry, goal, tone, platforms, userId, imageUrl } = await request.json();
+    const { prompt, industry, goal, tone, platforms } = await request.json();
 
     if (!prompt) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
@@ -57,19 +50,6 @@ No incluyas explicaciones ni comentarios, solo el copy.`;
     const copy = data.choices?.[0]?.message?.content?.trim();
 
     if (!copy) throw new Error('No se generó contenido');
-
-    // Guardar en historial si hay usuario
-    if (userId) {
-      await supabase.from('posts').insert({
-        user_id: userId,
-        prompt,
-        copy_text: copy,
-        image_url: imageUrl || null,
-        platform: platformList,
-        industry: industry || 'General',
-        goal: goal || 'Generar engagement',
-      });
-    }
 
     return Response.json({ copy });
 
