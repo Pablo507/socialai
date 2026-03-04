@@ -10,6 +10,8 @@ export default function DashboardPage() {
   const [copyLoading, setCopyLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharePlatform, setSharePlatform] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
@@ -22,6 +24,7 @@ export default function DashboardPage() {
   const [tone, setTone] = useState('Amigable');
   const [history, setHistory] = useState<any[]>([]);
   const [shareToast, setShareToast] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoStatus, setVideoStatus] = useState<'idle' | 'processing' | 'completed' | 'failed'>('idle');
@@ -63,43 +66,43 @@ export default function DashboardPage() {
     setTimeout(() => setShareToast(''), 3000);
   }
 
+  function openShareModal(platform: string) {
+    setSharePlatform(platform);
+    setShowShareModal(true);
+    setCopied(false);
+  }
+
+  async function copyAndOpen() {
+    const text = copyResult || previewContent;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => {
+      if (sharePlatform === 'Facebook') window.open('https://www.facebook.com/', '_blank');
+      else if (sharePlatform === 'Instagram') window.open('https://www.instagram.com/', '_blank');
+      else if (sharePlatform === 'WhatsApp') {
+        const encoded = encodeURIComponent(text);
+        window.open(`https://wa.me/?text=${encoded}`, '_blank');
+      }
+      setShowShareModal(false);
+      showToast('✅ ¡Listo para publicar!');
+    }, 800);
+  }
+
   async function shareNative() {
     const text = copyResult || previewContent;
     if (navigator.share) {
-      try {
-        await navigator.share({ text });
-        showToast('✅ Compartido exitosamente');
-      } catch {}
+      try { await navigator.share({ text }); showToast('✅ Compartido'); } catch {}
     } else {
       await navigator.clipboard.writeText(text);
-      showToast('📋 Texto copiado al portapapeles');
+      showToast('📋 Copiado al portapapeles');
     }
-  }
-
-  function shareToFacebook() {
-    const text = encodeURIComponent(copyResult || previewContent);
-    window.open(`https://www.facebook.com/sharer/sharer.php?quote=${text}`, '_blank', 'width=600,height=400');
-    showToast('📘 Abriendo Facebook...');
-  }
-
-  function shareToInstagram() {
-    // Instagram no tiene API de compartir por web, copiamos el texto y abrimos Instagram
-    navigator.clipboard.writeText(copyResult || previewContent);
-    window.open('https://www.instagram.com/', '_blank');
-    showToast('📋 Texto copiado — pegalo en Instagram');
-  }
-
-  function shareToWhatsApp() {
-    const text = encodeURIComponent(copyResult || previewContent);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
-    showToast('💬 Abriendo WhatsApp...');
   }
 
   async function downloadImage() {
     if (!previewImage) { showToast('⚠️ Seleccioná una imagen primero'); return; }
     const link = document.createElement('a');
     link.href = previewImage;
-    link.download = `socialai-imagen-${Date.now()}.jpg`;
+    link.download = `socialai-${Date.now()}.jpg`;
     link.click();
     showToast('⬇️ Descargando imagen...');
   }
@@ -141,14 +144,14 @@ export default function DashboardPage() {
       if (data.images) {
         setImages(data.images);
         setUsageCount(c => c + 1);
-      } else { alert('Error generando imágenes: ' + data.error); }
+      } else { alert('Error: ' + data.error); }
     } catch { alert('Error de conexión'); }
     setImageLoading(false);
   }
 
   async function generateVideo() {
     if (checkUsage()) return;
-    if (!videoPrompt.trim()) { alert('Describí tu idea de video'); return; }
+    if (!videoPrompt.trim()) { alert('Describí tu idea'); return; }
     setVideoStatus('processing');
     setVideoUrl('');
     setVideoQueuePosition(null);
@@ -159,11 +162,9 @@ export default function DashboardPage() {
         body: JSON.stringify({ prompt: videoPrompt }),
       });
       const data = await res.json();
-      if (data.requestId) {
-        setUsageCount(c => c + 1);
-        startPolling(data.requestId);
-      } else { setVideoStatus('failed'); alert('Error: ' + data.error); }
-    } catch { setVideoStatus('failed'); alert('Error de conexión'); }
+      if (data.requestId) { setUsageCount(c => c + 1); startPolling(data.requestId); }
+      else { setVideoStatus('failed'); alert('Error: ' + data.error); }
+    } catch { setVideoStatus('failed'); }
   }
 
   function startPolling(requestId: string) {
@@ -173,161 +174,262 @@ export default function DashboardPage() {
         const res = await fetch(`/api/video-status?requestId=${requestId}`);
         const data = await res.json();
         if (data.status === 'completed' && data.videoUrl) {
-          setVideoUrl(data.videoUrl);
-          setVideoStatus('completed');
+          setVideoUrl(data.videoUrl); setVideoStatus('completed');
           if (pollingRef.current) clearInterval(pollingRef.current);
         } else if (data.status === 'failed') {
           setVideoStatus('failed');
           if (pollingRef.current) clearInterval(pollingRef.current);
-        } else {
-          setVideoQueuePosition(data.queuePosition ?? null);
-        }
+        } else { setVideoQueuePosition(data.queuePosition ?? null); }
       } catch {}
     }, 5000);
   }
 
   function loadPost(post: any) {
-    if (post.copy_text) {
-      setCopyResult(post.copy_text);
-      setPreviewContent(post.copy_text.substring(0, 150) + '...');
-      setActivePanel('copy');
-    }
+    if (post.copy_text) { setCopyResult(post.copy_text); setPreviewContent(post.copy_text.substring(0, 150) + '...'); setActivePanel('copy'); }
     if (post.image_url) setPreviewImage(post.image_url);
   }
 
   const remaining = maxUsage - usageCount;
   const hasContent = !!(copyResult || previewImage);
-  const platformColors: Record<string, string> = {
-    'Facebook': '#1877f2', 'Instagram': '#e1306c', 'TikTok': '#00e5ff'
+  const currentText = copyResult || previewContent;
+
+  // Warm color palette
+  const C = {
+    bg: '#1C1814',
+    surface: '#242018',
+    surfaceHover: '#2C2820',
+    border: '#3A3228',
+    borderLight: '#4A4238',
+    text: '#F5EDD8',
+    textMuted: '#9A8E7A',
+    textDim: '#5A5248',
+    accent: '#E8935A',       // warm orange
+    accentSoft: '#C97A3E',
+    accentGlow: '#E8935A33',
+    gold: '#D4A853',
+    goldSoft: '#D4A85322',
+    rose: '#C96B6B',
+    roseSoft: '#C96B6B22',
+    green: '#7AB87A',
+    greenSoft: '#7AB87A22',
+    grad: 'linear-gradient(135deg, #E8935A, #D4A853)',
+    gradText: 'linear-gradient(135deg, #E8935A, #D4A853)',
+  };
+
+  const inputStyle = {
+    width: '100%',
+    background: C.bg,
+    border: `1px solid ${C.border}`,
+    borderRadius: 10,
+    color: C.text,
+    padding: '10px 14px',
+    fontSize: 14,
+    fontFamily: 'inherit',
+    outline: 'none',
+  } as React.CSSProperties;
+
+  const platformInfo: Record<string, { color: string; bg: string; url: string; icon: string }> = {
+    Facebook: { color: '#6B9FD4', bg: '#6B9FD422', url: 'https://www.facebook.com/', icon: '📘' },
+    Instagram: { color: '#D4836B', bg: '#D4836B22', url: 'https://www.instagram.com/', icon: '📸' },
+    WhatsApp:  { color: C.green, bg: C.greenSoft, url: '', icon: '💬' },
   };
 
   return (
-    <div style={{ fontFamily: 'system-ui,sans-serif', background: '#0a0a0f', color: '#f0f0fa', minHeight: '100vh' }}>
-      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+    <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: C.bg, color: C.text, minHeight: '100vh' }}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+      <style>{`
+        * { box-sizing: border-box; }
+        select option { background: #1C1814; color: #F5EDD8; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3A3228; border-radius: 3px; }
+        textarea:focus, select:focus, input:focus { border-color: #E8935A !important; box-shadow: 0 0 0 3px #E8935A18 !important; }
+        @keyframes shimmer { 0%,100% { opacity:.5 } 50% { opacity:1 } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes slideUp { from { opacity:0; transform:translateY(20px) } to { opacity:1; transform:translateY(0) } }
+        .fade-in { animation: fadeIn .3s ease forwards; }
+        .slide-up { animation: slideUp .35s ease forwards; }
+        .btn-hover:hover { opacity: .85; transform: translateY(-1px); transition: all .15s; }
+        .card-hover:hover { border-color: #4A4238 !important; transition: border-color .2s; }
+      `}</style>
 
       {/* TOAST */}
       {shareToast && (
-        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:'#18181f', border:'1px solid #2a2a38', borderRadius:12, padding:'10px 20px', fontSize:14, color:'#f0f0fa', zIndex:999, boxShadow:'0 4px 20px rgba(0,0,0,.5)', whiteSpace:'nowrap' }}>
+        <div className="slide-up" style={{ position:'fixed', bottom:28, left:'50%', transform:'translateX(-50%)', background: C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:'11px 22px', fontSize:14, color: C.text, zIndex:999, boxShadow:'0 8px 32px rgba(0,0,0,.5)', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:8 }}>
           {shareToast}
         </div>
       )}
 
+      {/* SHARE MODAL */}
+      {showShareModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.7)', backdropFilter:'blur(8px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={e => e.target === e.currentTarget && setShowShareModal(false)}>
+          <div className="slide-up" style={{ background: C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:32, maxWidth:480, width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,.6)' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+              <div style={{ fontFamily:"'Playfair Display', serif", fontSize:20, fontWeight:700, color: C.text }}>
+                {platformInfo[sharePlatform]?.icon} Publicar en {sharePlatform}
+              </div>
+              <button onClick={() => setShowShareModal(false)} style={{ background:'transparent', border:'none', color: C.textMuted, cursor:'pointer', fontSize:18, padding:4 }}>✕</button>
+            </div>
+
+            {/* TEXTO PREVIEW */}
+            <div style={{ background: C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:16, marginBottom:20, maxHeight:200, overflowY:'auto' }}>
+              <pre style={{ fontSize:13, lineHeight:1.7, color: C.text, whiteSpace:'pre-wrap', fontFamily:'inherit', margin:0 }}>{currentText}</pre>
+            </div>
+
+            {/* PASOS */}
+            <div style={{ marginBottom:20 }}>
+              {[
+                { n:'1', text: copied ? '✅ Texto copiado al portapapeles' : 'Copiá el texto con el botón de abajo', done: copied },
+                { n:'2', text: `Abrí ${sharePlatform} y creá una nueva publicación`, done: false },
+                { n:'3', text: 'Pegá el texto con Ctrl+V (o mantené presionado en móvil)', done: false },
+              ].map(step => (
+                <div key={step.n} style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:12 }}>
+                  <div style={{ width:24, height:24, borderRadius:'50%', background: step.done ? C.green : C.accentGlow, border:`1px solid ${step.done ? C.green : C.accent}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color: step.done ? '#fff' : C.accent, flexShrink:0, marginTop:1 }}>
+                    {step.done ? '✓' : step.n}
+                  </div>
+                  <span style={{ fontSize:13, color: step.done ? C.green : C.textMuted, lineHeight:1.5 }}>{step.text}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* BOTONES */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <button onClick={copyAndOpen} className="btn-hover"
+                style={{ background: copied ? C.green : C.grad, border:'none', color:'#fff', padding:'12px 16px', borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                {copied ? '✅ Copiado — abriendo...' : `📋 Copiar y abrir ${sharePlatform}`}
+              </button>
+              <button onClick={() => setShowShareModal(false)} className="btn-hover"
+                style={{ background:'transparent', border:`1px solid ${C.border}`, color: C.textMuted, padding:'12px 16px', borderRadius:10, fontSize:14, cursor:'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NAV */}
-      <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 32px', borderBottom:'1px solid #2a2a38', background:'rgba(10,10,15,0.9)', position:'sticky', top:0, zIndex:100 }}>
-        <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
+      <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 32px', borderBottom:`1px solid ${C.border}`, background: C.surface, position:'sticky', top:0, zIndex:100 }}>
+        <div style={{ fontFamily:"'Playfair Display', serif", fontSize:22, fontWeight:700, background: C.gradText, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ background:'rgba(124,92,252,.2)', border:'1px solid rgba(124,92,252,.4)', borderRadius:20, padding:'4px 12px', fontSize:12, color:'#7c5cfc', fontWeight:600 }}>
-            ✨ {remaining} generaciones restantes
+          <div style={{ background: C.accentGlow, border:`1px solid ${C.accent}55`, borderRadius:20, padding:'4px 14px', fontSize:12, color: C.accent, fontWeight:600 }}>
+            ✦ {remaining} generaciones restantes
           </div>
           {user
             ? <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:14, color:'#8888aa' }}>👤 {user.email}</span>
+                <span style={{ fontSize:13, color: C.textMuted }}>👤 {user.email}</span>
                 <button onClick={async () => { const s = createClient(); await s.auth.signOut(); window.location.href = '/auth/login'; }}
-                  style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
+                  style={{ background:'transparent', border:`1px solid ${C.border}`, color: C.textMuted, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
               </div>
             : <button onClick={() => window.location.href='/auth/login'}
-                style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14 }}>Iniciar sesión</button>
+                style={{ background:'transparent', border:`1px solid ${C.border}`, color: C.textMuted, padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Iniciar sesión</button>
           }
-          <button onClick={() => setShowModal(true)} style={{ background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:'8px 20px', borderRadius:8, cursor:'pointer', fontSize:14, fontWeight:500 }}>Upgrade Pro</button>
+          <button onClick={() => setShowModal(true)} className="btn-hover"
+            style={{ background: C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:600 }}>Upgrade Pro</button>
         </div>
       </nav>
 
       {/* USAGE BAR */}
-      <div style={{ padding:'10px 32px', background:'#111118', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', gap:16 }}>
-        <span style={{ fontSize:12, color:'#8888aa' }}>Uso gratuito</span>
-        <div style={{ flex:1, height:6, background:'#2a2a38', borderRadius:3, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${(usageCount/maxUsage)*100}%`, background:'linear-gradient(90deg,#7c5cfc,#e040fb)', borderRadius:3, transition:'width .5s' }} />
+      <div style={{ padding:'8px 32px', background: C.bg, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
+        <span style={{ fontSize:11, color: C.textDim, whiteSpace:'nowrap' }}>Plan gratuito</span>
+        <div style={{ flex:1, height:4, background: C.surface, borderRadius:2, overflow:'hidden' }}>
+          <div style={{ height:'100%', width:`${(usageCount/maxUsage)*100}%`, background: C.grad, borderRadius:2, transition:'width .5s' }} />
         </div>
-        <span style={{ fontSize:12, color:'#8888aa' }}><strong style={{ color:'#e040fb' }}>{usageCount}</strong> / {maxUsage}</span>
+        <span style={{ fontSize:11, color: C.textDim, whiteSpace:'nowrap' }}><strong style={{ color: C.accent }}>{usageCount}</strong> / {maxUsage}</span>
       </div>
 
       {/* LAYOUT */}
-      <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 280px', minHeight:'calc(100vh - 100px)' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 272px', minHeight:'calc(100vh - 97px)' }}>
 
         {/* SIDEBAR */}
-        <aside style={{ borderRight:'1px solid #2a2a38', padding:'24px 12px' }}>
+        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px' }}>
           {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
-              style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:8, cursor:'pointer', color: activePanel===id ? '#7c5cfc' : '#8888aa', fontSize:14, border: activePanel===id ? '1px solid rgba(124,92,252,.25)' : '1px solid transparent', background: activePanel===id ? 'rgba(124,92,252,.12)' : 'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:2 }}>
-              <span>{icon}</span> {label}
+              style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color: activePanel===id ? C.accent : C.textMuted, fontSize:13, border: activePanel===id ? `1px solid ${C.accent}44` : '1px solid transparent', background: activePanel===id ? C.accentGlow : 'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:2, transition:'all .15s' }}>
+              <span style={{ fontSize:15 }}>{icon}</span> {label}
             </button>
           ))}
-          <div style={{ borderTop:'1px solid #2a2a38', marginTop:16, paddingTop:16 }}>
-            <button onClick={() => setShowModal(true)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:8, cursor:'pointer', color:'#8888aa', fontSize:14, border:'1px solid transparent', background:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit' }}>
+          <div style={{ borderTop:`1px solid ${C.border}`, marginTop:16, paddingTop:16 }}>
+            <button onClick={() => setShowModal(true)} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color: C.gold, fontSize:13, border:'1px solid transparent', background:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit' }}>
               <span>⚡</span> Upgrade Pro
             </button>
           </div>
         </aside>
 
         {/* MAIN */}
-        <main style={{ padding:32, overflowY:'auto' }}>
+        <main style={{ padding:28, overflowY:'auto', background: C.bg }}>
 
           {/* COPYWRITING */}
           {activePanel === 'copy' && (
-            <div>
-              <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>✍️ Generador de Copywriting</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea textos persuasivos para cualquier red social con IA</p>
-              <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
+            <div className="fade-in">
+              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:26, fontWeight:700, marginBottom:4, color: C.text }}>✍️ Copywriting con IA</h1>
+              <p style={{ color: C.textMuted, fontSize:13, marginBottom:24 }}>Textos persuasivos listos para publicar</p>
+
+              <div style={{ background: C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
                 <div style={{ marginBottom:14 }}>
-                  <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Red social destino</label>
+                  <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:8, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Red social</label>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {[['📘 Facebook','Facebook'],['📸 Instagram','Instagram'],['🎵 TikTok','TikTok']].map(([label, name]) => {
+                    {[['📘','Facebook','#6B9FD4'],['📸','Instagram','#D4836B'],['🎵','TikTok','#7AB8C8']].map(([icon, name, color]) => {
                       const active = selectedPlatforms.includes(name);
-                      const color = platformColors[name];
                       return <button key={name} onClick={() => togglePlatform(name)}
-                        style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active ? color : '#2a2a38'}`, background: active ? `${color}22` : 'transparent', color: active ? color : '#8888aa', fontSize:13, cursor:'pointer' }}>{label}</button>;
+                        style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active ? color : C.border}`, background: active ? `${color}22` : 'transparent', color: active ? color : C.textMuted, fontSize:13, cursor:'pointer', transition:'all .15s' }}>{icon} {name}</button>;
                     })}
                   </div>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Industria</label>
-                    <select value={industry} onChange={e => setIndustry(e.target.value)}
-                      style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                    <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Industria</label>
+                    <select value={industry} onChange={e => setIndustry(e.target.value)} style={{ ...inputStyle }}>
                       {['Restaurante / Gastronomía','Moda y Ropa','Fitness y Salud','Tecnología','E-commerce','Inmobiliaria','Turismo','Educación'].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Objetivo</label>
-                    <select value={goal} onChange={e => setGoal(e.target.value)}
-                      style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                    <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Objetivo</label>
+                    <select value={goal} onChange={e => setGoal(e.target.value)} style={{ ...inputStyle }}>
                       {['Vender un producto','Generar engagement','Dar a conocer la marca','Promoción especial','Conseguir seguidores','Anunciar evento'].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                 </div>
+
                 <div style={{ marginBottom:14 }}>
-                  <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Tono</label>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:8, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Tono</label>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     {[['😊','Amigable'],['💼','Profesional'],['😂','Divertido'],['🔥','Urgente'],['✨','Inspirador']].map(([emoji, name]) => (
                       <button key={name} onClick={() => setTone(name)}
-                        style={{ padding:'6px 14px', borderRadius:8, border: tone===name ? '1px solid #7c5cfc' : '1px solid #2a2a38', background: tone===name ? 'rgba(124,92,252,.15)' : 'transparent', color: tone===name ? '#7c5cfc' : '#8888aa', fontSize:12, cursor:'pointer' }}>
+                        style={{ padding:'5px 12px', borderRadius:8, border: tone===name ? `1px solid ${C.accent}` : `1px solid ${C.border}`, background: tone===name ? C.accentGlow : 'transparent', color: tone===name ? C.accent : C.textMuted, fontSize:12, cursor:'pointer', transition:'all .15s' }}>
                         {emoji} {name}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div style={{ marginBottom:14 }}>
-                  <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Describe tu producto o idea</label>
+
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Tu producto o idea</label>
                   <textarea value={copyPrompt} onChange={e => setCopyPrompt(e.target.value)}
-                    style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none' }}
-                    rows={3} placeholder="Ej: Auriculares Sony negros con carga rápida, precio $2500..." />
+                    style={{ ...inputStyle, resize:'vertical' } as React.CSSProperties}
+                    rows={3} placeholder="Ej: Auriculares inalámbricos negros, sonido HD, $2500..." />
                 </div>
-                <button onClick={generateCopy} disabled={copyLoading}
-                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: copyLoading ? 0.7 : 1 }}>
-                  {copyLoading ? '⏳ Generando copy con IA...' : '⚡ Generar Copy con IA'}
+
+                <button onClick={generateCopy} disabled={copyLoading} className="btn-hover"
+                  style={{ width:'100%', background: copyLoading ? C.border : C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                  {copyLoading ? '⏳ Generando...' : '⚡ Generar Copy con IA'}
                 </button>
               </div>
+
               {copyResult && (
-                <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
-                  <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
-                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Contenido generado</span>
-                    <div style={{ display:'flex', gap:8 }}>
-                      <button onClick={() => { navigator.clipboard.writeText(copyResult); showToast('📋 Copiado'); }} style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>📋 Copiar</button>
-                      <button onClick={generateCopy} style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>🔄 Regenerar</button>
+                <div className="fade-in" style={{ background: C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
+                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', background: C.surfaceHover }}>
+                    <span style={{ fontSize:13, fontWeight:600, color: C.gold }}>✦ Copy generado</span>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <button onClick={() => { navigator.clipboard.writeText(copyResult); showToast('📋 Copiado'); }}
+                        style={{ padding:'5px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:'transparent', color: C.textMuted, fontSize:11, cursor:'pointer' }}>📋 Copiar</button>
+                      <button onClick={generateCopy}
+                        style={{ padding:'5px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:'transparent', color: C.textMuted, fontSize:11, cursor:'pointer' }}>🔄 Regenerar</button>
                     </div>
                   </div>
-                  <div style={{ padding:20 }}>
-                    <pre style={{ fontSize:14, lineHeight:1.7, color:'#f0f0fa', whiteSpace:'pre-wrap', fontFamily:'inherit', margin:0 }}>{copyResult}</pre>
+                  <div style={{ padding:18 }}>
+                    <pre style={{ fontSize:14, lineHeight:1.75, color: C.text, whiteSpace:'pre-wrap', fontFamily:'inherit', margin:0 }}>{copyResult}</pre>
                   </div>
                 </div>
               )}
@@ -336,45 +438,45 @@ export default function DashboardPage() {
 
           {/* IMAGES */}
           {activePanel === 'images' && (
-            <div>
-              <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🖼️ Generador de Imágenes</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea imágenes únicas con IA</p>
-              <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
-                <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Descripción</label>
+            <div className="fade-in">
+              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:26, fontWeight:700, marginBottom:4, color: C.text }}>🖼️ Generador de Imágenes</h1>
+              <p style={{ color: C.textMuted, fontSize:13, marginBottom:24 }}>4 variaciones únicas generadas con IA</p>
+              <div style={{ background: C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
+                <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Descripción</label>
                 <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
-                  style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }}
-                  rows={3} placeholder="Ej: niño feliz comiendo helado, parque soleado..." />
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
+                  style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
+                  rows={3} placeholder="Ej: taza de café humeante sobre mesa de madera, luz cálida..." />
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Formato</label>
-                    <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                    <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Formato</label>
+                    <select style={{ ...inputStyle }}>
                       <option>📱 Cuadrado (1:1)</option><option>📱 Vertical (9:16)</option><option>🖥️ Horizontal (16:9)</option>
                     </select>
                   </div>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Estilo</label>
-                    <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                    <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Estilo</label>
+                    <select style={{ ...inputStyle }}>
                       <option>Fotografía realista</option><option>Ilustración digital</option><option>Minimalista</option><option>3D Render</option>
                     </select>
                   </div>
                 </div>
-                <button onClick={generateImages} disabled={imageLoading}
-                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', opacity: imageLoading ? 0.7 : 1 }}>
+                <button onClick={generateImages} disabled={imageLoading} className="btn-hover"
+                  style={{ width:'100%', background: imageLoading ? C.border : C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, cursor:'pointer' }}>
                   {imageLoading ? '⏳ Generando imágenes (~10s)...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
               {images.length > 0 && (
-                <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
-                  <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
-                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Imágenes generadas</span>
-                    <span style={{ fontSize:11, color:'#8888aa' }}>👆 Click para previsualizar</span>
+                <div className="fade-in" style={{ background: C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
+                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', background: C.surfaceHover }}>
+                    <span style={{ fontSize:13, fontWeight:600, color: C.gold }}>✦ Imágenes generadas</span>
+                    <span style={{ fontSize:11, color: C.textMuted }}>Click para previsualizar →</span>
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, padding:20 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:16 }}>
                     {images.map((src, i) => (
-                      <div key={i} onClick={() => setPreviewImage(src)}
-                        style={{ background:'#18181f', border: previewImage===src ? '2px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:12, overflow:'hidden', cursor:'pointer', boxShadow: previewImage===src ? '0 0 12px rgba(124,92,252,.4)' : 'none' }}>
-                        <img src={src} alt={`Versión ${String.fromCharCode(65+i)}`} style={{ width:'100%', height:160, objectFit:'cover' }} />
-                        <div style={{ padding:'8px 12px', fontSize:12, color: previewImage===src ? '#7c5cfc' : '#8888aa', fontWeight: previewImage===src ? 600 : 400 }}>
+                      <div key={i} onClick={() => setPreviewImage(src)} className="card-hover"
+                        style={{ background: C.bg, border: previewImage===src ? `2px solid ${C.accent}` : `1px solid ${C.border}`, borderRadius:10, overflow:'hidden', cursor:'pointer', boxShadow: previewImage===src ? `0 0 16px ${C.accentGlow}` : 'none', transition:'all .2s' }}>
+                        <img src={src} alt={`V${i+1}`} style={{ width:'100%', height:150, objectFit:'cover' }} />
+                        <div style={{ padding:'7px 10px', fontSize:11, color: previewImage===src ? C.accent : C.textMuted, fontWeight: previewImage===src ? 600 : 400 }}>
                           {previewImage===src ? '✓ ' : ''}Versión {String.fromCharCode(65+i)}
                         </div>
                       </div>
@@ -387,64 +489,62 @@ export default function DashboardPage() {
 
           {/* VIDEOS */}
           {activePanel === 'videos' && (
-            <div>
-              <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🎬 Generador de Videos</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Crea videos cortos para TikTok, Reels e Instagram Stories con IA</p>
-              <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24, marginBottom:20 }}>
-                <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Describe tu video</label>
+            <div className="fade-in">
+              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:26, fontWeight:700, marginBottom:4, color: C.text }}>🎬 Generador de Videos</h1>
+              <p style={{ color: C.textMuted, fontSize:13, marginBottom:24 }}>Videos cortos para Reels, TikTok e Instagram Stories</p>
+              <div style={{ background: C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
+                <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Describe tu video</label>
                 <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)}
-                  style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14, resize:'vertical', fontFamily:'inherit', outline:'none', marginBottom:14 }}
-                  rows={3} placeholder="Ej: producto de belleza girando sobre fondo blanco con efecto de luz..." />
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
+                  style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
+                  rows={3} placeholder="Ej: café siendo servido en cámara lenta, vapor y luz cálida..." />
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Formato</label>
-                    <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
-                      <option>📱 Vertical 9:16 (Reels/TikTok)</option><option>⬜ Cuadrado 1:1</option><option>🖥️ Horizontal 16:9</option>
+                    <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Formato</label>
+                    <select style={{ ...inputStyle }}>
+                      <option>📱 Vertical 9:16</option><option>⬜ Cuadrado 1:1</option><option>🖥️ Horizontal 16:9</option>
                     </select>
                   </div>
                   <div>
-                    <label style={{ display:'block', fontSize:13, color:'#8888aa', marginBottom:6 }}>Duración</label>
-                    <select style={{ width:'100%', background:'#0a0a0f', border:'1px solid #2a2a38', borderRadius:10, color:'#f0f0fa', padding:'10px 14px', fontSize:14 }}>
+                    <label style={{ display:'block', fontSize:12, color: C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' }}>Duración</label>
+                    <select style={{ ...inputStyle }}>
                       <option>5 segundos</option><option>10 segundos</option>
                     </select>
                   </div>
                 </div>
-                <button onClick={generateVideo} disabled={videoStatus==='processing'}
-                  style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor: videoStatus==='processing' ? 'not-allowed' : 'pointer', opacity: videoStatus==='processing' ? 0.7 : 1 }}>
+                <button onClick={generateVideo} disabled={videoStatus==='processing'} className="btn-hover"
+                  style={{ width:'100%', background: videoStatus==='processing' ? C.border : C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, cursor: videoStatus==='processing' ? 'not-allowed' : 'pointer' }}>
                   {videoStatus === 'processing' ? '⏳ Generando video...' : '🎬 Generar Video con IA'}
                 </button>
               </div>
               {videoStatus === 'processing' && (
-                <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:32, textAlign:'center' }}>
-                  <div style={{ fontSize:40, marginBottom:12 }}>⏳</div>
-                  <div style={{ fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:600, marginBottom:8 }}>Generando tu video con IA...</div>
-                  <div style={{ fontSize:13, color:'#8888aa', marginBottom:16 }}>
-                    {videoQueuePosition !== null ? `Posición en cola: #${videoQueuePosition} · ` : ''}puede tardar 30-60 segundos
+                <div style={{ background: C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:32, textAlign:'center' }}>
+                  <div style={{ fontSize:36, marginBottom:12, animation:'shimmer 2s infinite' }}>⏳</div>
+                  <div style={{ fontFamily:"'Playfair Display', serif", fontSize:16, fontWeight:600, marginBottom:8, color: C.text }}>Generando con IA...</div>
+                  <div style={{ fontSize:13, color: C.textMuted, marginBottom:16 }}>
+                    {videoQueuePosition !== null ? `Cola: #${videoQueuePosition} · ` : ''}30–60 segundos aprox.
                   </div>
-                  <div style={{ height:4, background:'#2a2a38', borderRadius:2, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:'60%', background:'linear-gradient(90deg,#7c5cfc,#e040fb)', borderRadius:2 }} />
+                  <div style={{ height:3, background: C.border, borderRadius:2, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:'55%', background: C.grad, borderRadius:2, animation:'shimmer 2s infinite' }} />
                   </div>
                 </div>
               )}
               {videoStatus === 'completed' && videoUrl && (
-                <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden' }}>
-                  <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
-                    <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Video generado</span>
+                <div style={{ background: C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
+                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background: C.surfaceHover }}>
+                    <span style={{ fontSize:13, fontWeight:600, color: C.gold }}>✦ Video listo</span>
                     <a href={videoUrl} download target="_blank" rel="noreferrer"
-                      style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer', textDecoration:'none' }}>⬇️ Descargar MP4</a>
+                      style={{ padding:'5px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:'transparent', color: C.textMuted, fontSize:11, textDecoration:'none' }}>⬇️ Descargar</a>
                   </div>
-                  <div style={{ padding:20 }}>
-                    <video controls style={{ width:'100%', borderRadius:10, maxHeight:400 }}>
-                      <source src={videoUrl} type="video/mp4" />
-                    </video>
+                  <div style={{ padding:16 }}>
+                    <video controls style={{ width:'100%', borderRadius:8, maxHeight:360 }}><source src={videoUrl} type="video/mp4" /></video>
                   </div>
                 </div>
               )}
               {videoStatus === 'failed' && (
-                <div style={{ background:'rgba(255,50,50,.08)', border:'1px solid rgba(255,50,50,.2)', borderRadius:16, padding:24, textAlign:'center' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>❌</div>
-                  <div style={{ fontSize:14, color:'#ff6666' }}>Error generando el video. Intentá de nuevo.</div>
-                  <button onClick={() => setVideoStatus('idle')} style={{ marginTop:12, padding:'8px 20px', borderRadius:8, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', cursor:'pointer', fontSize:13 }}>Reintentar</button>
+                <div style={{ background: C.roseSoft, border:`1px solid ${C.rose}44`, borderRadius:16, padding:24, textAlign:'center' }}>
+                  <div style={{ fontSize:28, marginBottom:8 }}>❌</div>
+                  <div style={{ fontSize:13, color: C.rose, marginBottom:12 }}>Error al generar el video.</div>
+                  <button onClick={() => setVideoStatus('idle')} style={{ padding:'8px 18px', borderRadius:8, border:`1px solid ${C.border}`, background:'transparent', color: C.textMuted, cursor:'pointer', fontSize:13 }}>Reintentar</button>
                 </div>
               )}
             </div>
@@ -452,26 +552,26 @@ export default function DashboardPage() {
 
           {/* CALENDAR */}
           {activePanel === 'calendar' && (
-            <div>
-              <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>📅 Calendario Editorial</h1>
-              <p style={{ color:'#8888aa', fontSize:14, marginBottom:24 }}>Planifica y programa tus publicaciones</p>
-              <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:16, padding:24 }}>
-                <h2 style={{ fontFamily:'Syne,sans-serif', fontSize:18, fontWeight:700, marginBottom:16 }}>Marzo 2026</h2>
+            <div className="fade-in">
+              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:26, fontWeight:700, marginBottom:4, color: C.text }}>📅 Calendario Editorial</h1>
+              <p style={{ color: C.textMuted, fontSize:13, marginBottom:24 }}>Planificá tus publicaciones del mes</p>
+              <div style={{ background: C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22 }}>
+                <div style={{ fontFamily:"'Playfair Display', serif", fontSize:17, fontWeight:700, marginBottom:16, color: C.text }}>Marzo 2026</div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
                   {['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => (
-                    <div key={d} style={{ textAlign:'center', fontSize:11, color:'#8888aa', padding:'6px 0', fontWeight:600 }}>{d}</div>
+                    <div key={d} style={{ textAlign:'center', fontSize:10, color: C.textDim, padding:'5px 0', fontWeight:600, textTransform:'uppercase', letterSpacing:.5 }}>{d}</div>
                   ))}
                   {[1,2,3,4,5,6,7].map(d => (
-                    <div key={d} style={{ background: d===1 ? 'rgba(124,92,252,.08)' : '#18181f', border: d===1 ? '1px solid #7c5cfc' : '1px solid #2a2a38', borderRadius:8, minHeight:72, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:12, color: d===1 ? '#7c5cfc' : '#8888aa', fontWeight: d===1 ? 700 : 500 }}>{d}</div>
+                    <div key={d} className="card-hover" style={{ background: d===1 ? C.accentGlow : C.bg, border: d===1 ? `1px solid ${C.accent}55` : `1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
+                      <div style={{ fontSize:11, color: d===1 ? C.accent : C.textMuted, fontWeight: d===1 ? 700 : 400 }}>{d}</div>
                     </div>
                   ))}
                   {Array.from({length:24},(_,i)=>i+8).map(d => (
-                    <div key={d} style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:8, minHeight:72, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:12, color:'#8888aa' }}>{d}</div>
-                      {d===10 && <div style={{ background:'rgba(225,48,108,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>📸 Post</div>}
-                      {d===15 && <div style={{ background:'rgba(24,119,242,.2)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>📘 Reel</div>}
-                      {d===20 && <div style={{ background:'rgba(0,229,255,.15)', borderRadius:4, padding:'2px 5px', fontSize:10, color:'#f0f0fa', marginTop:2 }}>🎵 TikTok</div>}
+                    <div key={d} className="card-hover" style={{ background: C.bg, border:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
+                      <div style={{ fontSize:11, color: C.textDim }}>{d}</div>
+                      {d===10 && <div style={{ background: C.roseSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color: C.rose, marginTop:3 }}>📸 Post</div>}
+                      {d===15 && <div style={{ background:'#6B9FD422', borderRadius:4, padding:'2px 5px', fontSize:9, color:'#6B9FD4', marginTop:3 }}>📘 Reel</div>}
+                      {d===20 && <div style={{ background: C.goldSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color: C.gold, marginTop:3 }}>🎵 TikTok</div>}
                     </div>
                   ))}
                 </div>
@@ -481,134 +581,128 @@ export default function DashboardPage() {
         </main>
 
         {/* RIGHT PANEL */}
-        <aside style={{ borderLeft:'1px solid #2a2a38', padding:'24px 16px', overflowY:'auto' }}>
-          <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Vista previa</div>
+        <aside style={{ borderLeft:`1px solid ${C.border}`, padding:'20px 14px', overflowY:'auto', background: C.surface }}>
+          <div style={{ fontSize:10, fontWeight:700, marginBottom:14, color: C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Vista previa</div>
 
-          <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden', marginBottom:12 }}>
-            <div style={{ background:'#111118', padding:'10px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid #2a2a38' }}>
-              <div style={{ width:28, height:28, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>👤</div>
-              <div style={{ fontSize:13, fontWeight:600 }}>@tuempresa</div>
-              <div style={{ marginLeft:'auto', fontSize:10, color:'#8888aa', background:'#0a0a0f', padding:'2px 8px', borderRadius:4 }}>
+          {/* MOCK POST */}
+          <div style={{ background: C.bg, border:`1px solid ${C.border}`, borderRadius:14, overflow:'hidden', marginBottom:14 }}>
+            <div style={{ background: C.surfaceHover, padding:'9px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ width:26, height:26, background: C.grad, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>👤</div>
+              <div style={{ fontSize:12, fontWeight:600, color: C.text }}>@tuempresa</div>
+              <div style={{ marginLeft:'auto', fontSize:9, color: C.textMuted, background: C.surface, padding:'2px 7px', borderRadius:4, border:`1px solid ${C.border}` }}>
                 {selectedPlatforms[0] === 'Instagram' ? '📸 IG' : selectedPlatforms[0] === 'TikTok' ? '🎵 TT' : '📘 FB'}
               </div>
             </div>
-            <div style={{ height:160, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.1))', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ height:150, overflow:'hidden', position:'relative', background:`linear-gradient(135deg, ${C.accentGlow}, ${C.goldSoft})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {previewImage
-                ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Vista previa" />
-                : <span style={{ fontSize:36 }}>🖼️</span>
+                ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
+                : <span style={{ fontSize:32, opacity:.4 }}>🖼️</span>
               }
               {previewImage && (
                 <button onClick={() => setPreviewImage('')}
-                  style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.6)', border:'none', color:'white', borderRadius:'50%', width:22, height:22, fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                  style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.5)', border:'none', color:'white', borderRadius:'50%', width:20, height:20, fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               )}
             </div>
-            <div style={{ padding:12, fontSize:12, lineHeight:1.6, color: hasContent ? '#f0f0fa' : '#4a4a5a', minHeight:60 }}>
-              {hasContent ? (copyResult || previewContent).substring(0, 120) + '...' : 'Generá contenido para ver la preview...'}
+            <div style={{ padding:11, fontSize:12, lineHeight:1.65, color: hasContent ? C.text : C.textDim, minHeight:56 }}>
+              {hasContent ? currentText.substring(0, 100) + '...' : 'Generá contenido para ver la preview...'}
             </div>
-            <div style={{ padding:'8px 12px', borderTop:'1px solid #2a2a38', display:'flex', gap:12 }}>
-              {['❤️','💬','↗️'].map(a => <span key={a} style={{ fontSize:12, color:'#8888aa' }}>{a}</span>)}
+            <div style={{ padding:'8px 12px', borderTop:`1px solid ${C.border}`, display:'flex', gap:14 }}>
+              {['❤️','💬','↗️'].map(a => <span key={a} style={{ fontSize:13, cursor:'pointer' }}>{a}</span>)}
             </div>
           </div>
 
-          {/* PUBLISH BUTTONS */}
-          <div style={{ marginBottom:16 }}>
-            <div style={{ fontSize:11, fontWeight:700, marginBottom:10, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Publicar</div>
+          {/* PUBLISH */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ fontSize:10, fontWeight:700, marginBottom:10, color: C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Publicar</div>
 
-            <button onClick={shareNative}
-              style={{ width:'100%', background: hasContent ? 'linear-gradient(135deg,#7c5cfc,#e040fb)' : '#2a2a38', border:'none', color: hasContent ? 'white' : '#4a4a5a', padding:'11px 14px', borderRadius:10, fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, cursor: hasContent ? 'pointer' : 'not-allowed', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-              📱 Compartir ahora
+            <button onClick={shareNative} className="btn-hover"
+              style={{ width:'100%', background: hasContent ? C.grad : C.border, border:'none', color: hasContent ? '#fff' : C.textDim, padding:'10px 14px', borderRadius:10, fontSize:13, fontWeight:600, cursor: hasContent ? 'pointer' : 'not-allowed', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              📱 Compartir directo
             </button>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
-              <button onClick={shareToFacebook}
-                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #1877f233', background:'#1877f211', color: hasContent ? '#1877f2' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+              <button onClick={() => hasContent && openShareModal('Facebook')} className="btn-hover"
+                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent ? '#6B9FD444' : C.border}`, background: hasContent ? '#6B9FD411' : 'transparent', color: hasContent ? '#6B9FD4' : C.textDim, fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
                 📘 Facebook
               </button>
-              <button onClick={shareToInstagram}
-                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #e1306c33', background:'#e1306c11', color: hasContent ? '#e1306c' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+              <button onClick={() => hasContent && openShareModal('Instagram')} className="btn-hover"
+                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent ? '#D4836B44' : C.border}`, background: hasContent ? '#D4836B11' : 'transparent', color: hasContent ? '#D4836B' : C.textDim, fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
                 📸 Instagram
               </button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-              <button onClick={shareToWhatsApp}
-                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #25d36633', background:'#25d36611', color: hasContent ? '#25d366' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+              <button onClick={() => hasContent && openShareModal('WhatsApp')} className="btn-hover"
+                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent ? C.green+'44' : C.border}`, background: hasContent ? C.greenSoft : 'transparent', color: hasContent ? C.green : C.textDim, fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
                 💬 WhatsApp
               </button>
-              <button onClick={downloadImage}
-                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #2a2a38', background:'transparent', color: previewImage ? '#8888aa' : '#4a4a5a', fontSize:12, cursor: previewImage ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+              <button onClick={downloadImage} className="btn-hover"
+                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${previewImage ? C.border : C.border}`, background:'transparent', color: previewImage ? C.textMuted : C.textDim, fontSize:12, cursor: previewImage ? 'pointer' : 'not-allowed', fontWeight:600 }}>
                 ⬇️ Imagen
               </button>
             </div>
 
             {!hasContent && (
-              <div style={{ fontSize:11, color:'#4a4a5a', textAlign:'center', marginTop:8 }}>
-                Generá un copy o imagen para publicar
-              </div>
-            )}
-
-            {/* NOTA INSTAGRAM */}
-            {selectedPlatforms.includes('Instagram') && hasContent && (
-              <div style={{ marginTop:10, background:'rgba(225,48,108,.08)', border:'1px solid rgba(225,48,108,.2)', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#e1306c', lineHeight:1.5 }}>
-                📸 Instagram: el texto se copia automáticamente. Solo pegalo al abrir la app.
+              <div style={{ fontSize:11, color: C.textDim, textAlign:'center', marginTop:10, lineHeight:1.5 }}>
+                Generá un copy o imagen para habilitar
               </div>
             )}
           </div>
 
           {/* HISTORIAL */}
-          <div style={{ fontSize:11, fontWeight:700, marginBottom:12, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Historial</div>
+          <div style={{ fontSize:10, fontWeight:700, marginBottom:10, color: C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Historial</div>
           {history.length === 0 && (
-            <div style={{ fontSize:12, color:'#4a4a5a', textAlign:'center', padding:'16px 0' }}>Sin historial aún</div>
+            <div style={{ fontSize:12, color: C.textDim, textAlign:'center', padding:'14px 0' }}>Sin historial aún</div>
           )}
-          {history.slice(0, 8).map((post) => (
-            <div key={post.id} onClick={() => loadPost(post)}
-              style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:10, padding:12, marginBottom:8, cursor:'pointer' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                <span style={{ fontSize:10, padding:'2px 8px', borderRadius:4, fontWeight:600, background: post.image_url ? '#e040fb33' : '#7c5cfc33', color: post.image_url ? '#e040fb' : '#7c5cfc' }}>
-                  {post.image_url ? 'Imagen' : 'Copy'}
+          {history.slice(0, 8).map(post => (
+            <div key={post.id} onClick={() => loadPost(post)} className="card-hover"
+              style={{ background: C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:11, marginBottom:7, cursor:'pointer' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6 }}>
+                <span style={{ fontSize:9, padding:'2px 7px', borderRadius:4, fontWeight:700, letterSpacing:.3, background: post.image_url ? C.goldSoft : C.accentGlow, color: post.image_url ? C.gold : C.accent }}>
+                  {post.image_url ? 'IMAGEN' : 'COPY'}
                 </span>
-                <span style={{ fontSize:11, color:'#8888aa', marginLeft:'auto' }}>
+                <span style={{ fontSize:10, color: C.textDim, marginLeft:'auto' }}>
                   {new Date(post.created_at).toLocaleDateString('es-UY', { day:'2-digit', month:'short' })}
                 </span>
               </div>
-              {post.image_url && (
-                <img src={post.image_url} alt="" style={{ width:'100%', height:50, objectFit:'cover', borderRadius:6, marginBottom:6 }} />
-              )}
-              <div style={{ fontSize:12, color:'#8888aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {post.copy_text ? post.copy_text.substring(0, 45) + '...' : post.prompt}
+              {post.image_url && <img src={post.image_url} alt="" style={{ width:'100%', height:44, objectFit:'cover', borderRadius:5, marginBottom:5 }} />}
+              <div style={{ fontSize:11, color: C.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {post.copy_text ? post.copy_text.substring(0, 44) + '...' : post.prompt}
               </div>
             </div>
           ))}
         </aside>
       </div>
 
-      {/* PAYWALL MODAL */}
+      {/* UPGRADE MODAL */}
       {showModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center' }}
-          onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-          <div style={{ background:'#111118', border:'1px solid #2a2a38', borderRadius:24, padding:40, maxWidth:480, width:'90%', textAlign:'center' }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>🚀</div>
-            <h2 style={{ fontFamily:'Syne,sans-serif', fontSize:24, fontWeight:800, marginBottom:10, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-              Potencia tu contenido
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+          <div className="slide-up" style={{ background: C.surface, border:`1px solid ${C.borderLight}`, borderRadius:24, padding:40, maxWidth:460, width:'100%', textAlign:'center', boxShadow:'0 24px 64px rgba(0,0,0,.6)' }}>
+            <div style={{ fontSize:44, marginBottom:14 }}>🚀</div>
+            <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:24, fontWeight:700, marginBottom:10, background: C.gradText, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
+              Potenciá tu contenido
             </h2>
-            <p style={{ fontSize:14, color:'#8888aa', lineHeight:1.6, marginBottom:24 }}>
-              {remaining === 0 ? 'Alcanzaste el límite gratuito. Suscríbete para continuar.' : `Te quedan ${remaining} generaciones. Suscríbete para tener más.`}
+            <p style={{ fontSize:13, color: C.textMuted, lineHeight:1.7, marginBottom:24 }}>
+              {remaining === 0 ? 'Alcanzaste el límite gratuito. Suscribite para continuar.' : `Te quedan ${remaining} generaciones gratuitas.`}
             </p>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:24 }}>
-              <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:14, padding:16 }}>
-                <div style={{ fontFamily:'Syne,sans-serif', fontSize:15, fontWeight:700, marginBottom:4 }}>Básico</div>
-                <div style={{ fontSize:24, fontWeight:800, color:'#7c5cfc' }}>$360 <span style={{ fontSize:13, color:'#8888aa', fontWeight:400 }}>UYU/mes</span></div>
-                <div style={{ fontSize:12, color:'#8888aa', marginTop:6 }}>✓ 100 generaciones/mes</div>
+              <div style={{ background: C.bg, border:`1px solid ${C.border}`, borderRadius:14, padding:16 }}>
+                <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, marginBottom:4, color: C.text }}>Básico</div>
+                <div style={{ fontSize:22, fontWeight:800, color: C.accent }}>$360 <span style={{ fontSize:12, color: C.textMuted, fontWeight:400 }}>UYU/mes</span></div>
+                <div style={{ fontSize:11, color: C.textMuted, marginTop:6 }}>✓ 100 generaciones/mes</div>
               </div>
-              <div style={{ background:'linear-gradient(135deg,rgba(124,92,252,.15),rgba(224,64,251,.15))', border:'1px solid #7c5cfc', borderRadius:14, padding:16 }}>
-                <div style={{ fontFamily:'Syne,sans-serif', fontSize:15, fontWeight:700, marginBottom:4, color:'#7c5cfc' }}>⭐ Pro</div>
-                <div style={{ fontSize:24, fontWeight:800, color:'#e040fb' }}>$1150 <span style={{ fontSize:13, color:'#8888aa', fontWeight:400 }}>UYU/mes</span></div>
-                <div style={{ fontSize:12, color:'#8888aa', marginTop:6 }}>✓ Ilimitado + Videos</div>
+              <div style={{ background:`linear-gradient(135deg, ${C.accentGlow}, ${C.goldSoft})`, border:`1px solid ${C.accent}55`, borderRadius:14, padding:16 }}>
+                <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, marginBottom:4, color: C.gold }}>⭐ Pro</div>
+                <div style={{ fontSize:22, fontWeight:800, color: C.gold }}>$1150 <span style={{ fontSize:12, color: C.textMuted, fontWeight:400 }}>UYU/mes</span></div>
+                <div style={{ fontSize:11, color: C.textMuted, marginTop:6 }}>✓ Ilimitado + Videos</div>
               </div>
             </div>
-            <button onClick={() => setShowModal(false)} style={{ background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:'12px 32px', borderRadius:10, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor:'pointer', width:'100%', marginBottom:10 }}>
+            <button onClick={() => setShowModal(false)} className="btn-hover"
+              style={{ background: C.grad, border:'none', color:'#fff', padding:'12px 28px', borderRadius:10, fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, cursor:'pointer', width:'100%', marginBottom:10 }}>
               💙 Suscribirse con Mercado Pago
             </button>
-            <button onClick={() => setShowModal(false)} style={{ background:'transparent', border:'1px solid #2a2a38', color:'#8888aa', padding:'10px 24px', borderRadius:8, cursor:'pointer', fontSize:14 }}>
+            <button onClick={() => setShowModal(false)}
+              style={{ background:'transparent', border:`1px solid ${C.border}`, color: C.textMuted, padding:'9px 22px', borderRadius:8, cursor:'pointer', fontSize:13 }}>
               {remaining > 0 ? `Continuar gratis (${remaining} restantes)` : 'Cerrar'}
             </button>
           </div>
