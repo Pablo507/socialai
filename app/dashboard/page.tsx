@@ -23,7 +23,6 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [shareToast, setShareToast] = useState('');
 
-  // Video states
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoStatus, setVideoStatus] = useState<'idle' | 'processing' | 'completed' | 'failed'>('idle');
   const [videoUrl, setVideoUrl] = useState('');
@@ -64,16 +63,11 @@ export default function DashboardPage() {
     setTimeout(() => setShareToast(''), 3000);
   }
 
-  // SHARE FUNCTIONS
   async function shareNative() {
     const text = copyResult || previewContent;
     if (navigator.share) {
       try {
-        const shareData: ShareData = { text };
-        if (previewImage && previewImage.startsWith('http')) {
-          shareData.url = previewImage;
-        }
-        await navigator.share(shareData);
+        await navigator.share({ text });
         showToast('✅ Compartido exitosamente');
       } catch {}
     } else {
@@ -88,10 +82,11 @@ export default function DashboardPage() {
     showToast('📘 Abriendo Facebook...');
   }
 
-  function shareToTwitter() {
-    const text = encodeURIComponent((copyResult || previewContent).substring(0, 280));
-    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'width=600,height=400');
-    showToast('🐦 Abriendo Twitter/X...');
+  function shareToInstagram() {
+    // Instagram no tiene API de compartir por web, copiamos el texto y abrimos Instagram
+    navigator.clipboard.writeText(copyResult || previewContent);
+    window.open('https://www.instagram.com/', '_blank');
+    showToast('📋 Texto copiado — pegalo en Instagram');
   }
 
   function shareToWhatsApp() {
@@ -102,21 +97,11 @@ export default function DashboardPage() {
 
   async function downloadImage() {
     if (!previewImage) { showToast('⚠️ Seleccioná una imagen primero'); return; }
-    try {
-      const link = document.createElement('a');
-      link.href = previewImage;
-      link.download = `socialai-imagen-${Date.now()}.jpg`;
-      link.click();
-      showToast('⬇️ Descargando imagen...');
-    } catch {
-      showToast('❌ Error al descargar');
-    }
-  }
-
-  async function copyTextToClipboard() {
-    const text = copyResult || previewContent;
-    await navigator.clipboard.writeText(text);
-    showToast('📋 Texto copiado');
+    const link = document.createElement('a');
+    link.href = previewImage;
+    link.download = `socialai-imagen-${Date.now()}.jpg`;
+    link.click();
+    showToast('⬇️ Descargando imagen...');
   }
 
   async function generateCopy() {
@@ -127,11 +112,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/generate-copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: copyPrompt, industry, goal, tone,
-          platforms: selectedPlatforms, userId: user?.id,
-          imageUrl: previewImage || null,
-        }),
+        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms }),
       });
       const data = await res.json();
       if (data.copy) {
@@ -160,7 +141,6 @@ export default function DashboardPage() {
       if (data.images) {
         setImages(data.images);
         setUsageCount(c => c + 1);
-        if (user) loadHistory(user.id);
       } else { alert('Error generando imágenes: ' + data.error); }
     } catch { alert('Error de conexión'); }
     setImageLoading(false);
@@ -182,10 +162,7 @@ export default function DashboardPage() {
       if (data.requestId) {
         setUsageCount(c => c + 1);
         startPolling(data.requestId);
-      } else {
-        setVideoStatus('failed');
-        alert('Error: ' + data.error);
-      }
+      } else { setVideoStatus('failed'); alert('Error: ' + data.error); }
     } catch { setVideoStatus('failed'); alert('Error de conexión'); }
   }
 
@@ -219,14 +196,14 @@ export default function DashboardPage() {
   }
 
   const remaining = maxUsage - usageCount;
-  const hasContent = copyResult || previewImage;
+  const hasContent = !!(copyResult || previewImage);
   const platformColors: Record<string, string> = {
     'Facebook': '#1877f2', 'Instagram': '#e1306c', 'TikTok': '#00e5ff'
   };
 
   return (
     <div style={{ fontFamily: 'system-ui,sans-serif', background: '#0a0a0f', color: '#f0f0fa', minHeight: '100vh' }}>
-      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap" rel="stylesheet" />
 
       {/* TOAST */}
       {shareToast && (
@@ -285,6 +262,7 @@ export default function DashboardPage() {
         {/* MAIN */}
         <main style={{ padding:32, overflowY:'auto' }}>
 
+          {/* COPYWRITING */}
           {activePanel === 'copy' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>✍️ Generador de Copywriting</h1>
@@ -344,7 +322,7 @@ export default function DashboardPage() {
                   <div style={{ padding:'14px 20px', borderBottom:'1px solid #2a2a38', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#18181f' }}>
                     <span style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:600 }}>✅ Contenido generado</span>
                     <div style={{ display:'flex', gap:8 }}>
-                      <button onClick={() => navigator.clipboard.writeText(copyResult)} style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>📋 Copiar</button>
+                      <button onClick={() => { navigator.clipboard.writeText(copyResult); showToast('📋 Copiado'); }} style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>📋 Copiar</button>
                       <button onClick={generateCopy} style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #2a2a38', background:'transparent', color:'#8888aa', fontSize:12, cursor:'pointer' }}>🔄 Regenerar</button>
                     </div>
                   </div>
@@ -356,6 +334,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* IMAGES */}
           {activePanel === 'images' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🖼️ Generador de Imágenes</h1>
@@ -406,6 +385,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* VIDEOS */}
           {activePanel === 'videos' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>🎬 Generador de Videos</h1>
@@ -429,7 +409,7 @@ export default function DashboardPage() {
                     </select>
                   </div>
                 </div>
-                <button onClick={generateVideo} disabled={videoStatus === 'processing'}
+                <button onClick={generateVideo} disabled={videoStatus==='processing'}
                   style={{ width:'100%', background:'linear-gradient(135deg,#7c5cfc,#e040fb)', border:'none', color:'white', padding:14, borderRadius:12, fontFamily:'Syne,sans-serif', fontSize:16, fontWeight:700, cursor: videoStatus==='processing' ? 'not-allowed' : 'pointer', opacity: videoStatus==='processing' ? 0.7 : 1 }}>
                   {videoStatus === 'processing' ? '⏳ Generando video...' : '🎬 Generar Video con IA'}
                 </button>
@@ -470,6 +450,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* CALENDAR */}
           {activePanel === 'calendar' && (
             <div>
               <h1 style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:700, marginBottom:6 }}>📅 Calendario Editorial</h1>
@@ -503,7 +484,6 @@ export default function DashboardPage() {
         <aside style={{ borderLeft:'1px solid #2a2a38', padding:'24px 16px', overflowY:'auto' }}>
           <div style={{ fontSize:11, fontWeight:700, marginBottom:16, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Vista previa</div>
 
-          {/* MOCK POST */}
           <div style={{ background:'#18181f', border:'1px solid #2a2a38', borderRadius:16, overflow:'hidden', marginBottom:12 }}>
             <div style={{ background:'#111118', padding:'10px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid #2a2a38' }}>
               <div style={{ width:28, height:28, background:'linear-gradient(135deg,#7c5cfc,#e040fb)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>👤</div>
@@ -534,21 +514,19 @@ export default function DashboardPage() {
           <div style={{ marginBottom:16 }}>
             <div style={{ fontSize:11, fontWeight:700, marginBottom:10, color:'#8888aa', textTransform:'uppercase', letterSpacing:1 }}>Publicar</div>
 
-            {/* BOTÓN PRINCIPAL - COMPARTIR NATIVO */}
             <button onClick={shareNative}
               style={{ width:'100%', background: hasContent ? 'linear-gradient(135deg,#7c5cfc,#e040fb)' : '#2a2a38', border:'none', color: hasContent ? 'white' : '#4a4a5a', padding:'11px 14px', borderRadius:10, fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, cursor: hasContent ? 'pointer' : 'not-allowed', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
               📱 Compartir ahora
             </button>
 
-            {/* BOTONES POR RED SOCIAL */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
               <button onClick={shareToFacebook}
                 style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #1877f233', background:'#1877f211', color: hasContent ? '#1877f2' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
                 📘 Facebook
               </button>
-              <button onClick={shareToTwitter}
-                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #1d9bf033', background:'#1d9bf011', color: hasContent ? '#1d9bf0' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
-                🐦 Twitter/X
+              <button onClick={shareToInstagram}
+                style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #e1306c33', background:'#e1306c11', color: hasContent ? '#e1306c' : '#4a4a5a', fontSize:12, cursor: hasContent ? 'pointer' : 'not-allowed', fontWeight:600 }}>
+                📸 Instagram
               </button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
@@ -565,6 +543,13 @@ export default function DashboardPage() {
             {!hasContent && (
               <div style={{ fontSize:11, color:'#4a4a5a', textAlign:'center', marginTop:8 }}>
                 Generá un copy o imagen para publicar
+              </div>
+            )}
+
+            {/* NOTA INSTAGRAM */}
+            {selectedPlatforms.includes('Instagram') && hasContent && (
+              <div style={{ marginTop:10, background:'rgba(225,48,108,.08)', border:'1px solid rgba(225,48,108,.2)', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#e1306c', lineHeight:1.5 }}>
+                📸 Instagram: el texto se copia automáticamente. Solo pegalo al abrir la app.
               </div>
             )}
           </div>
