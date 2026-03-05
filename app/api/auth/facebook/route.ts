@@ -6,10 +6,13 @@ export async function GET() {
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`;
 
   const scopes = [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+    'instagram_business_content_publish',
     'pages_manage_posts',
     'pages_read_engagement',
-    'instagram_basic',
-    'instagram_content_publish',
+    'pages_show_list',
   ].join(',');
 
   const facebookAuthUrl =
