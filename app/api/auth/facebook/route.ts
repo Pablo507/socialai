@@ -1,9 +1,22 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
+  const cookieStore = cookies();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Obtener el usuario desde la cookie de Supabase
+  const accessToken = cookieStore.get('sb-access-token')?.value 
+    ?? cookieStore.get(`sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split('.')?.[0]?.split('//')?.[1]}-auth-token`)?.value;
+
+  let userId = '';
+  if (accessToken) {
+    const { data: { user } } = await supabase.auth.getUser(accessToken);
+    userId = user?.id ?? '';
+  }
 
   const clientId = process.env.FACEBOOK_APP_ID;
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`;
@@ -15,7 +28,7 @@ export async function GET() {
     'email',
   ].join(',');
 
-  const state = user?.id ?? Math.random().toString(36).substring(2);
+  const state = userId || Math.random().toString(36).substring(2);
 
   const facebookAuthUrl =
     `https://www.facebook.com/v19.0/dialog/oauth` +
