@@ -5,13 +5,14 @@ export async function GET() {
   const clientId = process.env.FACEBOOK_APP_ID;
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`;
 
-  const scopes = [
-    'instagram_basic',
-    'instagram_business_basic',
-    'business_management',
-    'email',
-  ].join(',');
-
+ const scopes = [
+  'instagram_basic',
+  'instagram_content_publish',  // ✅ para publicar posts
+  'pages_show_list',            // ✅ para listar páginas vinculadas
+  'pages_read_engagement',      // ✅ para leer la página de FB asociada
+  'email',
+].join(',');
+  
   const facebookAuthUrl =
     `https://www.facebook.com/v19.0/dialog/oauth` +
     `?client_id=${clientId}` +
