@@ -1,6 +1,3 @@
-// app/api/publish/route.ts
-// Publica contenido directo en Facebook o Instagram via API
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -20,7 +17,7 @@ export async function POST(request: Request) {
     const { data: conn, error } = await supabase
       .from('social_connections')
       .select('*')
-      .eq('facebook_user_id', facebookUserId)
+      .eq('user_id', facebookUserId)  // ✅ buscar por user_id de Supabase
       .single();
 
     if (error || !conn) {
@@ -42,8 +39,6 @@ export async function POST(request: Request) {
       let publishRes;
 
       if (imageUrl) {
-        // Post con imagen
-        // Primero subir la imagen
         const uploadRes = await fetch(
           `https://graph.facebook.com/v19.0/${pageId}/photos`,
           {
@@ -59,7 +54,6 @@ export async function POST(request: Request) {
         );
         publishRes = await uploadRes.json();
       } else {
-        // Post solo texto
         const postRes = await fetch(
           `https://graph.facebook.com/v19.0/${pageId}/feed`,
           {
@@ -82,7 +76,7 @@ export async function POST(request: Request) {
         success: true,
         platform: 'facebook',
         postId: publishRes.id,
-        pageNane: connection.facebook_page_name,
+        pageName: connection.facebook_page_name,
       });
     }
 
