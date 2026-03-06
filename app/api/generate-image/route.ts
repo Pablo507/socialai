@@ -47,8 +47,4 @@ export async function POST(request: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
-```
 
-Después agregá en Vercel:
-```
-UNSPLASH_ACCESS_KEY=tu_access_key
