@@ -9,34 +9,36 @@ export async function POST(request: Request) {
 
     const accessKey = process.env.UNSPLASH_ACCESS_KEY;
 
-    // Buscar 4 fotos relacionadas al prompt
+    // Queries con fallbacks genéricos
     const queries = [
       prompt,
       `${prompt} business`,
-      `${prompt} professional`,
-      `${prompt} marketing`,
+      'marketing social media',
+      'business professional',
     ];
 
     const imagePromises = queries.map(async (query) => {
-      const res = await fetch(
-        `https://api.unsplash.com/photos/random?query=${encodeURIComponent(query)}&orientation=squarish`,
-        {
-          headers: {
-            Authorization: `Client-ID ${accessKey}`,
-          },
+      // Intentar con el query específico, si falla usar uno genérico
+      for (const q of [query, 'business', 'technology', 'marketing']) {
+        const res = await fetch(
+          `https://api.unsplash.com/photos/random?query=${encodeURIComponent(q)}&orientation=squarish`,
+          {
+            headers: { Authorization: `Client-ID ${accessKey}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const imageUrl = data.urls?.regular;
+          if (imageUrl) {
+            const imgRes = await fetch(imageUrl);
+            const buffer = await imgRes.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+            return `data:${contentType};base64,${base64}`;
+          }
         }
-      );
-      if (!res.ok) throw new Error(`Unsplash error: ${res.status}`);
-      const data = await res.json();
-      const imageUrl = data.urls?.regular;
-      if (!imageUrl) throw new Error('No image URL from Unsplash');
-
-      // Descargar y convertir a base64
-      const imgRes = await fetch(imageUrl);
-      const buffer = await imgRes.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-      return `data:${contentType};base64,${base64}`;
+      }
+      throw new Error('No image found');
     });
 
     const images = await Promise.all(imagePromises);
