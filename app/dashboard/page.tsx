@@ -192,13 +192,18 @@ export default function DashboardPage() {
         });
         const data = await res.json();
         if (data.shareUrl) {
-          // Compartir la URL de la share page — WhatsApp mostrará la imagen via OG tags
-          window.open('https://wa.me/?text=' + encodeURIComponent(data.shareUrl), '_blank');
+          // Mostrar la URL en el toast para poder copiarla y testear en opengraph.xyz
+          showToast('🔗 ' + data.shareUrl);
+          await navigator.clipboard.writeText(data.shareUrl).catch(() => {});
+          setTimeout(() => {
+            window.open('https://wa.me/?text=' + encodeURIComponent(data.shareUrl), '_blank');
+          }, 2000);
         } else {
-          // Fallback: compartir solo texto
+          showToast('❌ Error: ' + (data.error || 'sin shareUrl'));
           window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
         }
-      } catch {
+      } catch (err: any) {
+        showToast('❌ Excepción: ' + err.message);
         window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
       }
     }
