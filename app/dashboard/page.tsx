@@ -447,7 +447,7 @@ export default function DashboardPage() {
       {showPublishModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.55)', backdropFilter:'blur(10px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={e => e.target===e.currentTarget && setShowPublishModal(false)}>
-          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:28, maxWidth:440, width:'100%', boxShadow:'0 32px 80px rgba(45,38,64,.18)', border:`1px solid ${C.border}` }}>
+          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:28, maxWidth:440, width:'100%', boxShadow:'0 32px 80px rgba(45,38,64,.18)' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
               <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:18, fontWeight:800 }}>🚀 Publicar directamente</div>
               <button onClick={() => setShowPublishModal(false)} style={{ background:'transparent', border:'none', color:C.textMuted, cursor:'pointer', fontSize:18 }}>✕</button>
@@ -856,7 +856,7 @@ export default function DashboardPage() {
       {showModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.50)', backdropFilter:'blur(12px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={e => e.target===e.currentTarget && setShowModal(false)}>
-          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:24, padding:40, maxWidth:460, width:'100%', textAlign:'center', boxShadow:'0 32px 80px rgba(45,38,64,.18)', border:`1px solid ${C.border}` }}>
+          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:40, maxWidth:460, width:'100%', textAlign:'center', boxShadow:'0 32px 80px rgba(45,38,64,.18)' }}>
             <div style={{ fontSize:44, marginBottom:14 }}>🚀</div>
             <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, fontWeight:700, marginBottom:10, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Potenciá tu contenido</h2>
             <p style={{ fontSize:13, color:C.textMuted, lineHeight:1.7, marginBottom:24 }}>
