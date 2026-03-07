@@ -65,6 +65,24 @@ export default function DashboardPage() {
         setFacebookConnected(true);
         showToast('✅ Facebook conectado correctamente');
         window.history.replaceState({}, '', '/dashboard');
+
+        // Restaurar el contenido que tenía antes de ir a conectar Facebook
+        const saved = sessionStorage.getItem('socialai_draft');
+        if (saved) {
+          try {
+            const draft = JSON.parse(saved);
+            if (draft.copyResult) setCopyResult(draft.copyResult);
+            if (draft.previewImage) setPreviewImage(draft.previewImage);
+            if (draft.previewContent) setPreviewContent(draft.previewContent);
+            if (draft.copyPrompt) setCopyPrompt(draft.copyPrompt);
+            if (draft.imagePrompt) setImagePrompt(draft.imagePrompt);
+            if (draft.selectedPlatforms) setSelectedPlatforms(draft.selectedPlatforms);
+            if (draft.industry) setIndustry(draft.industry);
+            if (draft.goal) setGoal(draft.goal);
+            if (draft.tone) setTone(draft.tone);
+          } catch {}
+          sessionStorage.removeItem('socialai_draft');
+        }
       }
 
       if (params.get('error') === 'facebook_auth_failed') {
@@ -104,6 +122,20 @@ export default function DashboardPage() {
   }
 
   function connectFacebook() {
+    // Guardar contenido generado en sessionStorage antes de ir a Facebook
+    // Al volver, lo restauramos para que el usuario no pierda su trabajo
+    const draft = {
+      copyResult,
+      previewImage,
+      previewContent,
+      copyPrompt,
+      imagePrompt,
+      selectedPlatforms,
+      industry,
+      goal,
+      tone,
+    };
+    sessionStorage.setItem('socialai_draft', JSON.stringify(draft));
     window.location.href = '/api/auth/facebook';
   }
 
