@@ -21,7 +21,7 @@ export default function DashboardPage() {
   const [imagePrompt, setImagePrompt] = useState('');
   const [copyPrompt, setCopyPrompt] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Facebook']);
-  const [industry, setIndustry] = useState('Restaurante / Gastronomía');
+  const [industry, setIndustry] = useState('General / Otro rubro');
   const [goal, setGoal] = useState('Vender un producto');
   const [tone, setTone] = useState('Amigable');
   const [history, setHistory] = useState<any[]>([]);
@@ -469,7 +469,7 @@ export default function DashboardPage() {
                 <div style={{ marginBottom:14 }}>
                   <label style={labelStyle}>Red social</label>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {[['📘','Facebook','#6B9FD4'],['📸','Instagram','#D4836B'],['🎵','TikTok','#7AB8C8']].map(([icon,name,color]) => {
+                    {[['📘','Facebook','#6B9FD4'],['📸','Instagram','#D4836B'],['💬','WhatsApp','#25D366']].map(([icon,name,color]) => {
                       const active = selectedPlatforms.includes(name);
                       return <button key={name} onClick={() => togglePlatform(name)}
                         style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active?color:C.border}`, background:active?`${color}22`:'transparent', color:active?color:C.textMuted, fontSize:13, cursor:'pointer' }}>{icon} {name}</button>;
@@ -481,7 +481,7 @@ export default function DashboardPage() {
                   <div>
                     <label style={labelStyle}>Industria</label>
                     <select value={industry} onChange={e => setIndustry(e.target.value)} style={inputStyle}>
-                      {['Restaurante / Gastronomía','Moda y Ropa','Fitness y Salud','Tecnología','E-commerce','Inmobiliaria','Turismo','Educación'].map(o => <option key={o}>{o}</option>)}
+                      {['General / Otro rubro','Restaurante / Gastronomía','Moda y Ropa','Fitness y Salud','Tecnología','E-commerce','Inmobiliaria','Turismo','Educación'].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                   <div>
@@ -695,7 +695,7 @@ export default function DashboardPage() {
               <div style={{ width:26, height:26, background:C.grad, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>👤</div>
               <div style={{ fontSize:12, fontWeight:600 }}>@tuempresa</div>
               <div style={{ marginLeft:'auto', fontSize:9, color:C.textMuted, background:C.surface, padding:'2px 7px', borderRadius:4, border:`1px solid ${C.border}` }}>
-                {selectedPlatforms[0]==='Instagram'?'📸 IG':selectedPlatforms[0]==='TikTok'?'🎵 TT':'📘 FB'}
+                {selectedPlatforms[0]==='Instagram'?'📸 IG':selectedPlatforms[0]==='WhatsApp'?'💬 WA':'📘 FB'}
               </div>
             </div>
             <div style={{ height:150, overflow:'hidden', position:'relative', background:`linear-gradient(135deg,${C.accentGlow},${C.goldSoft})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
