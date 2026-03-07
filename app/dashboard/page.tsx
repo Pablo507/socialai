@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [facebookConnected, setFacebookConnected] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<{success?: boolean; error?: string; platform?: string} | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoStatus, setVideoStatus] = useState<'idle'|'processing'|'completed'|'failed'>('idle');
   const [videoUrl, setVideoUrl] = useState('');
@@ -112,14 +113,45 @@ export default function DashboardPage() {
     setCopied(false);
   }
 
+  // Sube imagen base64 a Supabase Storage → devuelve URL pública para WhatsApp
+  async function uploadImageForSharing(): Promise<string | null> {
+    if (!previewImage || !previewImage.startsWith('data:')) return null;
+    try {
+      setUploadingImage(true);
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: previewImage, userId: user?.id }),
+      });
+      const data = await res.json();
+      return data.publicUrl ?? null;
+    } catch {
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   async function copyAndOpen() {
     const text = copyResult || previewContent;
     await navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => {
-      if (sharePlatform === 'Facebook') window.open('https://www.facebook.com/', '_blank');
-      else if (sharePlatform === 'Instagram') window.open('https://www.instagram.com/', '_blank');
-      else if (sharePlatform === 'WhatsApp') window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    setTimeout(async () => {
+      if (sharePlatform === 'Facebook') {
+        window.open('https://www.facebook.com/', '_blank');
+      } else if (sharePlatform === 'Instagram') {
+        window.open('https://www.instagram.com/', '_blank');
+      } else if (sharePlatform === 'WhatsApp') {
+        let waText = text;
+        if (previewImage) {
+          showToast('⏳ Preparando imagen...');
+          const publicUrl = await uploadImageForSharing();
+          if (publicUrl) waText = publicUrl + '
+
+' + text;
+        }
+        window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
+      }
       setShowShareModal(false);
       showToast('✅ ¡Listo para publicar!');
     }, 800);
@@ -711,9 +743,10 @@ export default function DashboardPage() {
               </button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-              <button onClick={() => hasContent && openShareModal('WhatsApp')} className="btn"
-                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent?C.green+'44':C.border}`, background:hasContent?C.greenSoft:'transparent', color:hasContent?C.green:C.textDim, fontSize:12, cursor:hasContent?'pointer':'not-allowed', fontWeight:600 }}>
-                💬 WhatsApp
+              <button onClick={() => hasContent && !uploadingImage && openShareModal('WhatsApp')} className="btn"
+                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent?C.green+'44':C.border}`, background:hasContent?C.greenSoft:'transparent', color:hasContent?C.green:C.textDim, fontSize:12, cursor:(hasContent&&!uploadingImage)?'pointer':'not-allowed', fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+                {uploadingImage ? <span style={{ width:10, height:10, border:'2px solid currentColor', borderTopColor:'transparent', borderRadius:'50%', display:'inline-block', animation:'spin 1s linear infinite' }} /> : '💬'}
+                {uploadingImage ? 'Subiendo...' : 'WhatsApp'}
               </button>
               <button onClick={downloadImage} className="btn"
                 style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${C.border}`, background:'transparent', color:previewImage?C.textMuted:C.textDim, fontSize:12, cursor:previewImage?'pointer':'not-allowed', fontWeight:600 }}>
