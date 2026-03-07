@@ -146,9 +146,7 @@ export default function DashboardPage() {
         if (previewImage) {
           showToast('⏳ Preparando imagen...');
           const publicUrl = await uploadImageForSharing();
-          if (publicUrl) waText = publicUrl + '
-
-' + text;
+          if (publicUrl) waText = publicUrl + '\n\n' + text;
         }
         window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
       }
