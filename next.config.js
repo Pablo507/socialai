@@ -4,7 +4,11 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'image.pollinations.ai',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'plus.unsplash.com',
       },
     ],
   },
@@ -15,7 +19,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "img-src 'self' data: https://image.pollinations.ai blob:;",
+            value: "img-src 'self' data: blob: https://images.unsplash.com https://plus.unsplash.com;",
           },
         ],
       },
