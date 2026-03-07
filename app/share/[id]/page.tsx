@@ -37,6 +37,12 @@ export async function generateMetadata(
   const description = copyText.substring(0, 160);
   const imageUrl = post.image_url || null;
 
+  // Usar la route /api/og-image que sirve la imagen con headers correctos para WhatsApp
+  // WhatsApp requiere que og:image sea accesible públicamente con Content-Type correcto
+  const ogImageUrl = imageUrl
+    ? `${appUrl}/api/og-image?url=${encodeURIComponent(imageUrl)}`
+    : null;
+
   return {
     title: 'SocialAI — Contenido para redes sociales',
     description,
@@ -45,10 +51,10 @@ export async function generateMetadata(
       description,
       url: `${appUrl}/share/${params.id}`,
       siteName: 'SocialAI',
-      ...(imageUrl && {
+      ...(ogImageUrl && {
         images: [
           {
-            url: imageUrl,
+            url: ogImageUrl,
             width: 1200,
             height: 630,
             alt: 'Imagen generada con SocialAI',
@@ -58,10 +64,10 @@ export async function generateMetadata(
       type: 'website',
     },
     twitter: {
-      card: imageUrl ? 'summary_large_image' : 'summary',
+      card: ogImageUrl ? 'summary_large_image' : 'summary',
       title: 'SocialAI — Contenido para redes sociales',
       description,
-      ...(imageUrl && { images: [imageUrl] }),
+      ...(ogImageUrl && { images: [ogImageUrl] }),
     },
   };
 }
