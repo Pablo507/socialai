@@ -405,7 +405,7 @@ export default function DashboardPage() {
       {showShareModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.55)', backdropFilter:'blur(10px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={e => e.target===e.currentTarget && setShowShareModal(false)}>
-          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:28, maxWidth:460, width:'100%', boxShadow:'0 32px 80px rgba(45,38,64,.18)', border:`1px solid ${C.border}` }}>
+          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:28, maxWidth:460, width:'100%', boxShadow:'0 32px 80px rgba(45,38,64,.18)' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
               <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:18, fontWeight:800 }}>
                 {sharePlatform === 'Facebook' ? '📘' : sharePlatform === 'Instagram' ? '📸' : '💬'} Publicar en {sharePlatform}
