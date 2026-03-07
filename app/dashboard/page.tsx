@@ -177,17 +177,30 @@ export default function DashboardPage() {
     } else if (sharePlatform === 'Instagram') {
       window.open('https://www.instagram.com/', '_blank');
     } else if (sharePlatform === 'WhatsApp') {
-      let waText = text;
-      if (previewImage) {
-        showToast('⏳ Subiendo imagen...');
-        const publicUrl = await uploadImageForSharing();
-        if (publicUrl) {
-          waText = publicUrl + '\n\n' + text;
+      // Crear una share page con OG meta tags para que WhatsApp muestre el preview con imagen
+      showToast('⏳ Preparando preview...');
+      try {
+        const res = await fetch('/api/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: previewImage || null,
+            copyText: text,
+            userId: user?.id,
+            platform: 'whatsapp',
+          }),
+        });
+        const data = await res.json();
+        if (data.shareUrl) {
+          // Compartir la URL de la share page — WhatsApp mostrará la imagen via OG tags
+          window.open('https://wa.me/?text=' + encodeURIComponent(data.shareUrl), '_blank');
         } else {
-          showToast('⚠️ No se pudo subir la imagen, compartiendo solo texto');
+          // Fallback: compartir solo texto
+          window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
         }
+      } catch {
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
       }
-      window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
     }
 
     setShowShareModal(false);
