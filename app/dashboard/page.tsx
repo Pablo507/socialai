@@ -1,4 +1,5 @@
 'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -29,7 +30,6 @@ export default function DashboardPage() {
   const [facebookConnected, setFacebookConnected] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<{success?: boolean; error?: string; platform?: string} | null>(null);
-
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoStatus, setVideoStatus] = useState<'idle'|'processing'|'completed'|'failed'>('idle');
   const [videoUrl, setVideoUrl] = useState('');
@@ -38,22 +38,41 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      if (data.user) loadHistory(data.user.id);
-    });
 
-    // Detectar si volvió de conectar Facebook
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('facebook_connected') === 'true') {
-      setFacebookConnected(true);
-      showToast('✅ Facebook conectado correctamente');
-      window.history.replaceState({}, '', '/dashboard');
+    async function init() {
+      // 1. Obtener usuario
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      setUser(currentUser);
+      if (currentUser) {
+        loadHistory(currentUser.id);
+
+        // ✅ NUEVO: Verificar si ya tiene Facebook conectado en Supabase
+        // Esto hace que al recargar la página, el estado de conexión persista
+        // Sin esto, facebookConnected vuelve a false en cada recarga
+        const { data: conn } = await supabase
+          .from('social_connections')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .single();
+
+        if (conn) setFacebookConnected(true);
+      }
+
+      // 2. Detectar si volvió de conectar Facebook exitosamente
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('facebook_connected') === 'true') {
+        setFacebookConnected(true);
+        showToast('✅ Facebook conectado correctamente');
+        window.history.replaceState({}, '', '/dashboard');
+      }
+
+      if (params.get('error') === 'facebook_auth_failed') {
+        showToast('❌ Error conectando Facebook. Intentá de nuevo.');
+        window.history.replaceState({}, '', '/dashboard');
+      }
     }
-    if (params.get('error') === 'facebook_auth_failed') {
-      showToast('❌ Error conectando Facebook. Intentá de nuevo.');
-      window.history.replaceState({}, '', '/dashboard');
-    }
+
+    init();
 
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
@@ -328,7 +347,6 @@ export default function DashboardPage() {
               <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700 }}>🚀 Publicar directamente</div>
               <button onClick={() => setShowPublishModal(false)} style={{ background:'transparent', border:'none', color:C.textMuted, cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
-
             {/* Preview del contenido */}
             <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:14, marginBottom:18 }}>
               {previewImage && <img src={previewImage} style={{ width:'100%', height:120, objectFit:'cover', borderRadius:7, marginBottom:10 }} alt="" />}
@@ -336,7 +354,6 @@ export default function DashboardPage() {
                 {currentText.substring(0, 120)}...
               </pre>
             </div>
-
             {/* Botones de publicación directa */}
             <div style={{ display:'grid', gap:10, marginBottom:12 }}>
               <button onClick={() => publishDirect('facebook')} disabled={publishing} className="btn"
@@ -350,13 +367,11 @@ export default function DashboardPage() {
                 {publishing ? 'Publicando...' : 'Publicar en Instagram'}
               </button>
             </div>
-
             {!previewImage && (
               <div style={{ fontSize:11, color:C.textMuted, textAlign:'center', padding:'8px', background:C.accentGlow, borderRadius:8, marginBottom:12 }}>
                 ⚠️ Instagram requiere una imagen. Generá una en la sección Imágenes.
               </div>
             )}
-
             <div style={{ fontSize:11, color:C.textDim, textAlign:'center' }}>
               Publicación directa via Meta API
             </div>
@@ -419,6 +434,7 @@ export default function DashboardPage() {
             <div className="fade-in">
               <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>✍️ Copywriting con IA</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Textos persuasivos listos para publicar</p>
+
               <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
                 <div style={{ marginBottom:14 }}>
                   <label style={labelStyle}>Red social</label>
@@ -430,6 +446,7 @@ export default function DashboardPage() {
                     })}
                   </div>
                 </div>
+
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
                   <div>
                     <label style={labelStyle}>Industria</label>
@@ -444,6 +461,7 @@ export default function DashboardPage() {
                     </select>
                   </div>
                 </div>
+
                 <div style={{ marginBottom:14 }}>
                   <label style={labelStyle}>Tono</label>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -455,16 +473,19 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 </div>
+
                 <div style={{ marginBottom:16 }}>
                   <label style={labelStyle}>Tu producto o idea</label>
                   <textarea value={copyPrompt} onChange={e => setCopyPrompt(e.target.value)} style={{ ...inputStyle, resize:'vertical' } as React.CSSProperties}
                     rows={3} placeholder="Ej: Auriculares inalámbricos negros, sonido HD, $2500..." />
                 </div>
+
                 <button onClick={generateCopy} disabled={copyLoading} className="btn"
                   style={{ width:'100%', background:copyLoading?C.border:C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, cursor:'pointer' }}>
                   {copyLoading ? '⏳ Generando...' : '⚡ Generar Copy con IA'}
                 </button>
               </div>
+
               {copyResult && (
                 <div className="fade-in" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:C.surfaceHover }}>
@@ -488,6 +509,7 @@ export default function DashboardPage() {
             <div className="fade-in">
               <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>🖼️ Generador de Imágenes</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>4 variaciones únicas generadas con IA</p>
+
               <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
                 <label style={labelStyle}>Descripción</label>
                 <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
@@ -505,6 +527,7 @@ export default function DashboardPage() {
                   {imageLoading ? '⏳ Generando (~10s)...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
+
               {images.length > 0 && (
                 <div className="fade-in" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:C.surfaceHover }}>
@@ -531,6 +554,7 @@ export default function DashboardPage() {
             <div className="fade-in">
               <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>🎬 Generador de Videos</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Videos cortos para Reels y TikTok</p>
+
               <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
                 <label style={labelStyle}>Describe tu video</label>
                 <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
@@ -548,6 +572,7 @@ export default function DashboardPage() {
                   {videoStatus==='processing' ? '⏳ Generando video...' : '🎬 Generar Video con IA'}
                 </button>
               </div>
+
               {videoStatus==='processing' && (
                 <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:32, textAlign:'center' }}>
                   <div style={{ fontSize:36, marginBottom:12, animation:'shimmer 2s infinite' }}>⏳</div>
@@ -558,6 +583,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
               {videoStatus==='completed' && videoUrl && (
                 <div style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:C.surfaceHover }}>
@@ -569,6 +595,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
               {videoStatus==='failed' && (
                 <div style={{ background:C.roseSoft, border:`1px solid ${C.rose}44`, borderRadius:16, padding:24, textAlign:'center' }}>
                   <div style={{ fontSize:28, marginBottom:8 }}>❌</div>
