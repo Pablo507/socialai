@@ -168,23 +168,30 @@ export default function DashboardPage() {
     const text = copyResult || previewContent;
     await navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(async () => {
-      if (sharePlatform === 'Facebook') {
-        window.open('https://www.facebook.com/', '_blank');
-      } else if (sharePlatform === 'Instagram') {
-        window.open('https://www.instagram.com/', '_blank');
-      } else if (sharePlatform === 'WhatsApp') {
-        let waText = text;
-        if (previewImage) {
-          showToast('⏳ Preparando imagen...');
-          const publicUrl = await uploadImageForSharing();
-          if (publicUrl) waText = publicUrl + '\n\n' + text;
+
+    // Pequeña pausa visual para que el usuario vea el "Copiado"
+    await new Promise(r => setTimeout(r, 600));
+
+    if (sharePlatform === 'Facebook') {
+      window.open('https://www.facebook.com/', '_blank');
+    } else if (sharePlatform === 'Instagram') {
+      window.open('https://www.instagram.com/', '_blank');
+    } else if (sharePlatform === 'WhatsApp') {
+      let waText = text;
+      if (previewImage) {
+        showToast('⏳ Subiendo imagen...');
+        const publicUrl = await uploadImageForSharing();
+        if (publicUrl) {
+          waText = publicUrl + '\n\n' + text;
+        } else {
+          showToast('⚠️ No se pudo subir la imagen, compartiendo solo texto');
         }
-        window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
       }
-      setShowShareModal(false);
-      showToast('✅ ¡Listo para publicar!');
-    }, 800);
+      window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
+    }
+
+    setShowShareModal(false);
+    showToast('✅ ¡Listo para publicar!');
   }
 
   async function publishDirect(platform: 'facebook' | 'instagram') {
@@ -192,13 +199,30 @@ export default function DashboardPage() {
     setPublishing(true);
     setPublishResult(null);
     try {
+      // Meta Graph API requiere URL pública, no base64
+      // Si la imagen es base64, la subimos a Supabase Storage primero
+      let imageUrl: string | null = null;
+      if (previewImage) {
+        if (previewImage.startsWith('data:')) {
+          showToast('⏳ Subiendo imagen...');
+          imageUrl = await uploadImageForSharing();
+          if (!imageUrl) {
+            showToast('❌ No se pudo subir la imagen');
+            setPublishing(false);
+            return;
+          }
+        } else {
+          imageUrl = previewImage; // ya es URL pública
+        }
+      }
+
       const res = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform,
           text: copyResult || previewContent,
-          imageUrl: previewImage || null,
+          imageUrl,
           facebookUserId: user.id,
         }),
       });
@@ -319,52 +343,71 @@ export default function DashboardPage() {
   const currentText = copyResult || previewContent;
 
   const C = {
-    bg: '#1C1814', surface: '#242018', surfaceHover: '#2C2820',
-    border: '#3A3228', borderLight: '#4A4238',
-    text: '#F5EDD8', textMuted: '#9A8E7A', textDim: '#5A5248',
-    accent: '#E8935A', accentGlow: '#E8935A33',
-    gold: '#D4A853', goldSoft: '#D4A85322',
-    rose: '#C96B6B', roseSoft: '#C96B6B22',
-    green: '#7AB87A', greenSoft: '#7AB87A22',
-    grad: 'linear-gradient(135deg, #E8935A, #D4A853)',
+    bg: '#FAF8F5',         // crema suave — fondo principal
+    surface: '#FFFFFF',    // blanco puro — tarjetas
+    surfaceHover: '#F3EFF9',
+    border: '#E8E0F0',     // lavanda muy suave
+    borderLight: '#F0EBF8',
+    text: '#2D2640',       // púrpura oscuro — texto principal
+    textMuted: '#7B6E99',  // lavanda medio
+    textDim: '#B5AACC',    // lavanda claro
+    accent: '#7C5CBF',     // púrpura vibrante — acento principal
+    accentGlow: '#7C5CBF18',
+    accentSoft: '#EDE8F8', // lavanda suave para fondos de botones
+    gold: '#F59E6B',       // durazno cálido
+    goldSoft: '#FEF0E7',
+    rose: '#E87BAA',       // rosa pastel fuerte
+    roseSoft: '#FDE8F2',
+    green: '#5BB894',      // menta
+    greenSoft: '#E6F5F0',
+    blue: '#5B9BD5',
+    blueSoft: '#E8F2FC',
+    grad: 'linear-gradient(135deg, #7C5CBF, #B07FE8)',
+    gradWarm: 'linear-gradient(135deg, #F59E6B, #E87BAA)',
   };
 
-  const inputStyle = { width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:'10px 14px', fontSize:14, fontFamily:'inherit', outline:'none' } as React.CSSProperties;
-  const labelStyle = { display:'block', fontSize:12, color:C.textMuted, marginBottom:6, fontWeight:600, letterSpacing:.5, textTransform:'uppercase' } as React.CSSProperties;
+  const inputStyle = { width:'100%', background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:12, color:C.text, padding:'11px 14px', fontSize:14, fontFamily:'inherit', outline:'none', boxShadow:'0 1px 4px rgba(124,92,191,.06)' } as React.CSSProperties;
+  const labelStyle = { display:'block', fontSize:11, color:C.textMuted, marginBottom:6, fontWeight:700, letterSpacing:.8, textTransform:'uppercase' } as React.CSSProperties;
 
   return (
-    <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif", background:C.bg, color:C.text, minHeight:'100vh' }}>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <div style={{ fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif", background:C.bg, color:C.text, minHeight:'100vh' }}>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
       <style>{`
         *{box-sizing:border-box}
-        select option{background:#1C1814;color:#F5EDD8}
+        body{background:#FAF8F5}
+        select option{background:#FFFFFF;color:#2D2640}
         ::-webkit-scrollbar{width:5px}
-        ::-webkit-scrollbar-thumb{background:#3A3228;border-radius:3px}
-        textarea:focus,select:focus{border-color:#E8935A!important;box-shadow:0 0 0 3px #E8935A18!important}
+        ::-webkit-scrollbar-track{background:#F3EFF9}
+        ::-webkit-scrollbar-thumb{background:#C4B8E0;border-radius:3px}
+        textarea:focus,select:focus{border-color:#7C5CBF!important;box-shadow:0 0 0 3px #7C5CBF15!important;outline:none}
         @keyframes shimmer{0%,100%{opacity:.5}50%{opacity:1}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
         .fade-in{animation:fadeIn .3s ease forwards}
-        .slide-up{animation:slideUp .3s ease forwards}
-        .btn:hover{opacity:.85;transform:translateY(-1px);transition:all .15s}
-        .card:hover{border-color:#4A4238!important;transition:border-color .2s}
+        .slide-up{animation:slideUp .35s cubic-bezier(.22,1,.36,1) forwards}
+        .btn{transition:all .18s cubic-bezier(.22,1,.36,1)}
+        .btn:hover{opacity:.88;transform:translateY(-2px);box-shadow:0 4px 16px rgba(124,92,191,.18)!important}
+        .btn:active{transform:translateY(0)}
+        .card{transition:box-shadow .2s,border-color .2s}
+        .card:hover{border-color:#C4B8E0!important;box-shadow:0 4px 20px rgba(124,92,191,.08)!important}
         @keyframes spin{to{transform:rotate(360deg)}}
+        input::placeholder,textarea::placeholder{color:#B5AACC}
       `}</style>
 
       {/* TOAST */}
       {shareToast && (
-        <div className="slide-up" style={{ position:'fixed', bottom:28, left:'50%', transform:'translateX(-50%)', background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:'11px 22px', fontSize:14, color:C.text, zIndex:999, boxShadow:'0 8px 32px rgba(0,0,0,.5)', whiteSpace:'nowrap' }}>
+        <div className="slide-up" style={{ position:'fixed', bottom:28, left:'50%', transform:'translateX(-50%)', background:C.text, border:'none', borderRadius:12, padding:'12px 22px', fontSize:14, color:'#FAF8F5', zIndex:999, boxShadow:'0 8px 32px rgba(45,38,64,.25)', whiteSpace:'nowrap', fontWeight:500 }}>
           {shareToast}
         </div>
       )}
 
       {/* SHARE MODAL (manual) */}
       {showShareModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.7)', backdropFilter:'blur(8px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+        <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.55)', backdropFilter:'blur(10px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={e => e.target===e.currentTarget && setShowShareModal(false)}>
-          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:28, maxWidth:460, width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,.6)' }}>
+          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:28, maxWidth:460, width:'100%', boxShadow:'0 32px 80px rgba(45,38,64,.18)', border:`1px solid ${C.border}` }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
-              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700 }}>
+              <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:18, fontWeight:800 }}>
                 {sharePlatform === 'Facebook' ? '📘' : sharePlatform === 'Instagram' ? '📸' : '💬'} Publicar en {sharePlatform}
               </div>
               <button onClick={() => setShowShareModal(false)} style={{ background:'transparent', border:'none', color:C.textMuted, cursor:'pointer', fontSize:18 }}>✕</button>
@@ -402,11 +445,11 @@ export default function DashboardPage() {
 
       {/* PUBLISH DIRECT MODAL */}
       {showPublishModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.7)', backdropFilter:'blur(8px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+        <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.55)', backdropFilter:'blur(10px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={e => e.target===e.currentTarget && setShowPublishModal(false)}>
-          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:28, maxWidth:440, width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,.6)' }}>
+          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:20, padding:28, maxWidth:440, width:'100%', boxShadow:'0 32px 80px rgba(45,38,64,.18)', border:`1px solid ${C.border}` }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
-              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700 }}>🚀 Publicar directamente</div>
+              <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:18, fontWeight:800 }}>🚀 Publicar directamente</div>
               <button onClick={() => setShowPublishModal(false)} style={{ background:'transparent', border:'none', color:C.textMuted, cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
             {/* Preview del contenido */}
@@ -443,9 +486,9 @@ export default function DashboardPage() {
 
       {/* NAV */}
       <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 32px', borderBottom:`1px solid ${C.border}`, background:C.surface, position:'sticky', top:0, zIndex:100 }}>
-        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:22, fontWeight:700, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
+        <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:22, fontWeight:800, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ background:C.accentGlow, border:`1px solid ${C.accent}55`, borderRadius:20, padding:'4px 14px', fontSize:12, color:C.accent, fontWeight:600 }}>
+          <div style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}55`, borderRadius:20, padding:'5px 14px', fontSize:12, color:C.accent, fontWeight:700 }}>
             ✦ {remaining} generaciones restantes
           </div>
           {user
@@ -458,14 +501,14 @@ export default function DashboardPage() {
                 style={{ background:'transparent', border:`1px solid ${C.border}`, color:C.textMuted, padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Iniciar sesión</button>
           }
           <button onClick={() => setShowModal(true)} className="btn"
-            style={{ background:C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:600 }}>Upgrade Pro</button>
+            style={{ background:C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700, boxShadow:'0 3px 12px rgba(124,92,191,.28)' }}>Upgrade Pro</button>
         </div>
       </nav>
 
       {/* USAGE BAR */}
-      <div style={{ padding:'8px 32px', background:C.bg, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
+      <div style={{ padding:'8px 32px', background:'#F3EFF9', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
         <span style={{ fontSize:11, color:C.textDim }}>Plan gratuito</span>
-        <div style={{ flex:1, height:4, background:C.surface, borderRadius:2, overflow:'hidden' }}>
+        <div style={{ flex:1, height:5, background:'#E8E0F0', borderRadius:3, overflow:'hidden' }}>
           <div style={{ height:'100%', width:`${(usageCount/maxUsage)*100}%`, background:C.grad, borderRadius:2, transition:'width .5s' }} />
         </div>
         <span style={{ fontSize:11, color:C.textDim }}><strong style={{ color:C.accent }}>{usageCount}</strong> / {maxUsage}</span>
@@ -475,36 +518,36 @@ export default function DashboardPage() {
       <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 272px', minHeight:'calc(100vh - 97px)' }}>
 
         {/* SIDEBAR */}
-        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px' }}>
+        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface }}>
           {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
-              style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:activePanel===id?C.accent:C.textMuted, fontSize:13, border:activePanel===id?`1px solid ${C.accent}44`:'1px solid transparent', background:activePanel===id?C.accentGlow:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:2 }}>
+              style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:activePanel===id?C.accent:C.textMuted, fontSize:13, fontWeight:activePanel===id?700:500, border:activePanel===id?`1.5px solid ${C.accent}44`:'1.5px solid transparent', background:activePanel===id?C.accentSoft:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:3 }}>
               <span style={{ fontSize:15 }}>{icon}</span> {label}
             </button>
           ))}
           <div style={{ borderTop:`1px solid ${C.border}`, marginTop:16, paddingTop:16 }}>
-            <button onClick={() => setShowModal(true)} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:C.gold, fontSize:13, border:'1px solid transparent', background:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit' }}>
+            <button onClick={() => setShowModal(true)} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:10, cursor:'pointer', color:C.accent, fontSize:13, fontWeight:700, border:`1.5px solid ${C.accent}33`, background:C.accentSoft, width:'100%', textAlign:'left', fontFamily:'inherit' }}>
               <span>⚡</span> Upgrade Pro
             </button>
           </div>
         </aside>
 
         {/* MAIN */}
-        <main style={{ padding:28, overflowY:'auto', background:C.bg }}>
+        <main style={{ padding:28, overflowY:'auto', background:C.bg, minHeight:'calc(100vh - 97px)' }}>
 
           {activePanel === 'copy' && (
             <div className="fade-in">
-              <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>✍️ Copywriting con IA</h1>
+              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>✍️ Copywriting con IA</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Textos persuasivos listos para publicar</p>
 
-              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
+              <div style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:18, padding:24, marginBottom:20, boxShadow:'0 2px 16px rgba(124,92,191,.06)' }}>
                 <div style={{ marginBottom:14 }}>
                   <label style={labelStyle}>Red social</label>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                     {[['📘','Facebook','#6B9FD4'],['📸','Instagram','#D4836B'],['💬','WhatsApp','#25D366']].map(([icon,name,color]) => {
                       const active = selectedPlatforms.includes(name);
                       return <button key={name} onClick={() => togglePlatform(name)}
-                        style={{ padding:'6px 14px', borderRadius:20, border:`1px solid ${active?color:C.border}`, background:active?`${color}22`:'transparent', color:active?color:C.textMuted, fontSize:13, cursor:'pointer' }}>{icon} {name}</button>;
+                        style={{ padding:'7px 16px', borderRadius:20, border:`2px solid ${active?color:C.border}`, background:active?`${color}18`:'transparent', color:active?color:C.textMuted, fontSize:13, cursor:'pointer', fontWeight:active?700:500 }}>{icon} {name}</button>;
                     })}
                   </div>
                 </div>
@@ -529,7 +572,7 @@ export default function DashboardPage() {
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     {[['😊','Amigable'],['💼','Profesional'],['😂','Divertido'],['🔥','Urgente'],['✨','Inspirador']].map(([emoji,name]) => (
                       <button key={name} onClick={() => setTone(name)}
-                        style={{ padding:'5px 12px', borderRadius:8, border:tone===name?`1px solid ${C.accent}`:`1px solid ${C.border}`, background:tone===name?C.accentGlow:'transparent', color:tone===name?C.accent:C.textMuted, fontSize:12, cursor:'pointer' }}>
+                        style={{ padding:'6px 13px', borderRadius:20, border:`2px solid ${tone===name?C.accent:C.border}`, background:tone===name?C.accentSoft:'transparent', color:tone===name?C.accent:C.textMuted, fontSize:12, cursor:'pointer', fontWeight:tone===name?700:500 }}>
                         {emoji} {name}
                       </button>
                     ))}
@@ -543,15 +586,15 @@ export default function DashboardPage() {
                 </div>
 
                 <button onClick={generateCopy} disabled={copyLoading} className="btn"
-                  style={{ width:'100%', background:copyLoading?C.border:C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                  style={{ width:'100%', background:copyLoading?C.border:C.grad, border:'none', color:'#fff', padding:14, borderRadius:14, fontFamily:"'Nunito',sans-serif", fontSize:15, fontWeight:800, cursor:'pointer', boxShadow:copyLoading?'none':'0 4px 18px rgba(124,92,191,.32)' }}>
                   {copyLoading ? '⏳ Generando...' : '⚡ Generar Copy con IA'}
                 </button>
               </div>
 
               {copyResult && (
                 <div className="fade-in" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
-                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:C.surfaceHover }}>
-                    <span style={{ fontSize:13, fontWeight:600, color:C.gold }}>✦ Copy generado</span>
+                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:'#F8F5FF' }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.accent }}>✦ Copy generado</span>
                     <div style={{ display:'flex', gap:6 }}>
                       <button onClick={() => { navigator.clipboard.writeText(copyResult); showToast('📋 Copiado'); }}
                         style={{ padding:'5px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:'transparent', color:C.textMuted, fontSize:11, cursor:'pointer' }}>📋 Copiar</button>
@@ -569,10 +612,10 @@ export default function DashboardPage() {
 
           {activePanel === 'images' && (
             <div className="fade-in">
-              <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>🖼️ Generador de Imágenes</h1>
+              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>🖼️ Generador de Imágenes</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>4 variaciones únicas generadas con IA</p>
 
-              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
+              <div style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:18, padding:24, marginBottom:20, boxShadow:'0 2px 16px rgba(124,92,191,.06)' }}>
                 <label style={labelStyle}>Descripción</label>
                 <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
                   rows={3} placeholder="Ej: taza de café humeante sobre mesa de madera..." />
@@ -585,15 +628,15 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <button onClick={generateImages} disabled={imageLoading} className="btn"
-                  style={{ width:'100%', background:imageLoading?C.border:C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                  style={{ width:'100%', background:imageLoading?C.border:C.grad, border:'none', color:'#fff', padding:14, borderRadius:14, fontFamily:"'Nunito',sans-serif", fontSize:15, fontWeight:800, cursor:'pointer', boxShadow:imageLoading?'none':'0 4px 18px rgba(124,92,191,.32)' }}>
                   {imageLoading ? '⏳ Generando (~10s)...' : '🎨 Generar 4 Imágenes'}
                 </button>
               </div>
 
               {images.length > 0 && (
                 <div className="fade-in" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
-                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:C.surfaceHover }}>
-                    <span style={{ fontSize:13, fontWeight:600, color:C.gold }}>✦ Imágenes generadas</span>
+                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:'#F8F5FF' }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.accent }}>✦ Imágenes generadas</span>
                     <span style={{ fontSize:11, color:C.textMuted }}>Click para seleccionar →</span>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:16 }}>
@@ -614,10 +657,10 @@ export default function DashboardPage() {
 
           {activePanel === 'videos' && (
             <div className="fade-in">
-              <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>🎬 Generador de Videos</h1>
+              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>🎬 Generador de Videos</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Videos cortos para Reels y TikTok</p>
 
-              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22, marginBottom:18 }}>
+              <div style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:18, padding:24, marginBottom:20, boxShadow:'0 2px 16px rgba(124,92,191,.06)' }}>
                 <label style={labelStyle}>Describe tu video</label>
                 <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
                   rows={3} placeholder="Ej: café siendo servido en cámara lenta, vapor y luz cálida..." />
@@ -648,8 +691,8 @@ export default function DashboardPage() {
 
               {videoStatus==='completed' && videoUrl && (
                 <div style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
-                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:C.surfaceHover }}>
-                    <span style={{ fontSize:13, fontWeight:600, color:C.gold }}>✦ Video listo</span>
+                  <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:'#F8F5FF' }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.accent }}>✦ Video listo</span>
                     <a href={videoUrl} download target="_blank" rel="noreferrer" style={{ padding:'5px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:'transparent', color:C.textMuted, fontSize:11, textDecoration:'none' }}>⬇️ Descargar</a>
                   </div>
                   <div style={{ padding:16 }}>
@@ -670,7 +713,7 @@ export default function DashboardPage() {
 
           {activePanel === 'calendar' && (
             <div className="fade-in">
-              <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:700, marginBottom:4 }}>📅 Calendario Editorial</h1>
+              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>📅 Calendario Editorial</h1>
               <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Planificá tus publicaciones del mes</p>
               <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22 }}>
                 <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, fontWeight:700, marginBottom:16 }}>Marzo 2026</div>
@@ -702,7 +745,7 @@ export default function DashboardPage() {
 
           {/* CONEXIÓN FACEBOOK */}
           <div style={{ marginBottom:16 }}>
-            <div style={{ fontSize:10, fontWeight:700, marginBottom:10, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Cuenta conectada</div>
+            <div style={{ fontSize:10, fontWeight:700, marginBottom:12, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Cuenta conectada</div>
             {facebookConnected ? (
               <div style={{ background:C.greenSoft, border:`1px solid ${C.green}44`, borderRadius:10, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:18 }}>✅</span>
@@ -713,28 +756,28 @@ export default function DashboardPage() {
               </div>
             ) : (
               <button onClick={connectFacebook} className="btn"
-                style={{ width:'100%', background:'#1877f2', border:'none', color:'#fff', padding:'11px 14px', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                style={{ width:'100%', background:'#1877f2', border:'none', color:'#fff', padding:'12px 14px', borderRadius:12, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 4px 14px rgba(24,119,242,.30)' }}>
                 <span style={{ fontSize:16 }}>📘</span> Conectar Facebook
               </button>
             )}
           </div>
 
-          <div style={{ fontSize:10, fontWeight:700, marginBottom:10, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Vista previa</div>
+          <div style={{ fontSize:10, fontWeight:700, marginBottom:12, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Vista previa</div>
 
           {/* MOCK POST */}
-          <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:14, overflow:'hidden', marginBottom:14 }}>
-            <div style={{ background:C.surfaceHover, padding:'9px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:`1px solid ${C.border}` }}>
+          <div style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:16, overflow:'hidden', marginBottom:14, boxShadow:'0 2px 12px rgba(124,92,191,.07)' }}>
+            <div style={{ background:'#F3EFF9', padding:'9px 12px', display:'flex', alignItems:'center', gap:8, borderBottom:`1px solid ${C.border}` }}>
               <div style={{ width:26, height:26, background:C.grad, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>👤</div>
               <div style={{ fontSize:12, fontWeight:600 }}>@tuempresa</div>
               <div style={{ marginLeft:'auto', fontSize:9, color:C.textMuted, background:C.surface, padding:'2px 7px', borderRadius:4, border:`1px solid ${C.border}` }}>
                 {selectedPlatforms[0]==='Instagram'?'📸 IG':selectedPlatforms[0]==='WhatsApp'?'💬 WA':'📘 FB'}
               </div>
             </div>
-            <div style={{ height:150, overflow:'hidden', position:'relative', background:`linear-gradient(135deg,${C.accentGlow},${C.goldSoft})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ height:150, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,#EDE8F8,#FEF0E7)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {previewImage ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" /> : <span style={{ fontSize:32, opacity:.4 }}>🖼️</span>}
               {previewImage && (
                 <button onClick={() => setPreviewImage('')}
-                  style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,.5)', border:'none', color:'white', borderRadius:'50%', width:20, height:20, fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                  style={{ position:'absolute', top:6, right:6, background:'rgba(45,38,64,.65)', border:'none', color:'white', borderRadius:'50%', width:20, height:20, fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               )}
             </div>
             <div style={{ padding:11, fontSize:12, lineHeight:1.65, color:hasContent?C.text:C.textDim, minHeight:56 }}>
@@ -747,39 +790,39 @@ export default function DashboardPage() {
 
           {/* PUBLISH BUTTONS */}
           <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:10, fontWeight:700, marginBottom:10, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Publicar</div>
+            <div style={{ fontSize:10, fontWeight:700, marginBottom:12, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Publicar</div>
 
             {/* PUBLICACIÓN DIRECTA — solo si está conectado */}
             {facebookConnected ? (
               <button onClick={() => hasContent && setShowPublishModal(true)} className="btn"
-                style={{ width:'100%', background:hasContent?C.grad:C.border, border:'none', color:hasContent?'#fff':C.textDim, padding:'11px 14px', borderRadius:10, fontSize:13, fontWeight:700, cursor:hasContent?'pointer':'not-allowed', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                style={{ width:'100%', background:hasContent?C.grad:C.border, border:'none', color:hasContent?'#fff':C.textDim, padding:'12px 14px', borderRadius:14, fontSize:13, fontWeight:700, cursor:hasContent?'pointer':'not-allowed', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:hasContent?'0 4px 14px rgba(124,92,191,.28)':'none' }}>
                 🚀 Publicar directamente
               </button>
             ) : (
               <button onClick={shareNative} className="btn"
-                style={{ width:'100%', background:hasContent?C.grad:C.border, border:'none', color:hasContent?'#fff':C.textDim, padding:'11px 14px', borderRadius:10, fontSize:13, fontWeight:700, cursor:hasContent?'pointer':'not-allowed', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                style={{ width:'100%', background:hasContent?C.grad:C.border, border:'none', color:hasContent?'#fff':C.textDim, padding:'12px 14px', borderRadius:14, fontSize:13, fontWeight:700, cursor:hasContent?'pointer':'not-allowed', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:hasContent?'0 4px 14px rgba(124,92,191,.28)':'none' }}>
                 📱 Compartir ahora
               </button>
             )}
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
               <button onClick={() => hasContent && openShareModal('Facebook')} className="btn"
-                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent?'#6B9FD444':C.border}`, background:hasContent?'#6B9FD411':'transparent', color:hasContent?'#6B9FD4':C.textDim, fontSize:12, cursor:hasContent?'pointer':'not-allowed', fontWeight:600 }}>
+                style={{ padding:'9px 10px', borderRadius:10, border:`1.5px solid ${hasContent?'#5B9BD5':C.border}`, background:hasContent?C.blueSoft:'transparent', color:hasContent?C.blue:C.textDim, fontSize:12, cursor:hasContent?'pointer':'not-allowed', fontWeight:700 }}>
                 📘 Facebook
               </button>
               <button onClick={() => hasContent && openShareModal('Instagram')} className="btn"
-                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent?'#D4836B44':C.border}`, background:hasContent?'#D4836B11':'transparent', color:hasContent?'#D4836B':C.textDim, fontSize:12, cursor:hasContent?'pointer':'not-allowed', fontWeight:600 }}>
+                style={{ padding:'9px 10px', borderRadius:10, border:`1.5px solid ${hasContent?C.rose:C.border}`, background:hasContent?C.roseSoft:'transparent', color:hasContent?C.rose:C.textDim, fontSize:12, cursor:hasContent?'pointer':'not-allowed', fontWeight:700 }}>
                 📸 Instagram
               </button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
               <button onClick={() => hasContent && !uploadingImage && openShareModal('WhatsApp')} className="btn"
-                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${hasContent?C.green+'44':C.border}`, background:hasContent?C.greenSoft:'transparent', color:hasContent?C.green:C.textDim, fontSize:12, cursor:(hasContent&&!uploadingImage)?'pointer':'not-allowed', fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+                style={{ padding:'9px 10px', borderRadius:10, border:`1.5px solid ${hasContent?C.green:C.border}`, background:hasContent?C.greenSoft:'transparent', color:hasContent?C.green:C.textDim, fontSize:12, cursor:(hasContent&&!uploadingImage)?'pointer':'not-allowed', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
                 {uploadingImage ? <span style={{ width:10, height:10, border:'2px solid currentColor', borderTopColor:'transparent', borderRadius:'50%', display:'inline-block', animation:'spin 1s linear infinite' }} /> : '💬'}
                 {uploadingImage ? 'Subiendo...' : 'WhatsApp'}
               </button>
               <button onClick={downloadImage} className="btn"
-                style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${C.border}`, background:'transparent', color:previewImage?C.textMuted:C.textDim, fontSize:12, cursor:previewImage?'pointer':'not-allowed', fontWeight:600 }}>
+                style={{ padding:'9px 10px', borderRadius:10, border:`1.5px solid ${previewImage?C.accent:C.border}`, background:previewImage?C.accentSoft:'transparent', color:previewImage?C.accent:C.textDim, fontSize:12, cursor:previewImage?'pointer':'not-allowed', fontWeight:700 }}>
                 ⬇️ Imagen
               </button>
             </div>
@@ -787,7 +830,7 @@ export default function DashboardPage() {
           </div>
 
           {/* HISTORIAL */}
-          <div style={{ fontSize:10, fontWeight:700, marginBottom:10, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Historial</div>
+          <div style={{ fontSize:10, fontWeight:700, marginBottom:12, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Historial</div>
           {history.length===0 && <div style={{ fontSize:12, color:C.textDim, textAlign:'center', padding:'14px 0' }}>Sin historial aún</div>}
           {history.slice(0,8).map(post => (
             <div key={post.id} onClick={() => loadPost(post)} className="card"
@@ -811,9 +854,9 @@ export default function DashboardPage() {
 
       {/* UPGRADE MODAL */}
       {showModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+        <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.50)', backdropFilter:'blur(12px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={e => e.target===e.currentTarget && setShowModal(false)}>
-          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:24, padding:40, maxWidth:460, width:'100%', textAlign:'center', boxShadow:'0 24px 64px rgba(0,0,0,.6)' }}>
+          <div className="slide-up" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:24, padding:40, maxWidth:460, width:'100%', textAlign:'center', boxShadow:'0 32px 80px rgba(45,38,64,.18)', border:`1px solid ${C.border}` }}>
             <div style={{ fontSize:44, marginBottom:14 }}>🚀</div>
             <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, fontWeight:700, marginBottom:10, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Potenciá tu contenido</h2>
             <p style={{ fontSize:13, color:C.textMuted, lineHeight:1.7, marginBottom:24 }}>
