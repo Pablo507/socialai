@@ -1,22 +1,28 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export async function GET() {
   const cookieStore = cookies();
-  const supabase = createClient(
+
+  // Usar @supabase/ssr para leer la sesión correctamente
+  // (evita depender del nombre exacto de la cookie que varía entre versiones)
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        },
+      },
+    }
   );
 
-  // Obtener el usuario desde la cookie de Supabase
-  const accessToken = cookieStore.get('sb-access-token')?.value 
-    ?? cookieStore.get(`sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split('.')?.[0]?.split('//')?.[1]}-auth-token`)?.value;
-
-  let userId = '';
-  if (accessToken) {
-    const { data: { user } } = await supabase.auth.getUser(accessToken);
-    userId = user?.id ?? '';
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  const state = user?.id ?? Math.random().toString(36).substring(2);
 
   const clientId = process.env.FACEBOOK_APP_ID;
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`;
@@ -27,8 +33,6 @@ export async function GET() {
     'pages_read_engagement',
     'email',
   ].join(',');
-
-  const state = userId || Math.random().toString(36).substring(2);
 
   const facebookAuthUrl =
     `https://www.facebook.com/v19.0/dialog/oauth` +
