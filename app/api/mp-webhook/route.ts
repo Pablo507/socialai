@@ -57,11 +57,13 @@ export async function POST(req: NextRequest) {
 
     console.log('📩 Webhook MP recibido:', body.type, body.action);
 
-    // Verificar firma (en producción esto es muy importante)
-    // En desarrollo puedes comentar esta verificación temporalmente
-    // if (!verifyWebhookSignature(req, rawBody)) {
-    //   return NextResponse.json({ error: 'Firma inválida' }, { status: 401 });
-    // }
+    // Verificar firma en producción (protege contra webhooks falsos)
+    if (process.env.NODE_ENV === 'production' && process.env.MP_WEBHOOK_SECRET) {
+      if (!verifyWebhookSignature(req, rawBody)) {
+        console.warn('⚠️ Webhook MP: firma inválida');
+        return NextResponse.json({ error: 'Firma inválida' }, { status: 401 });
+      }
+    }
 
     // Solo procesamos eventos de suscripciones
     if (body.type !== 'subscription_preapproval') {
