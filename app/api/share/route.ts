@@ -56,22 +56,7 @@ export async function POST(request: Request) {
       });
 
     if (insertError) {
-      // Si falla por columnas faltantes, intentar con columnas básicas
-      console.error('Insert error (full):', insertError.message);
-      const { error: insertError2 } = await supabase
-        .from('posts')
-        .insert({
-          user_id: userId || null,
-          share_id: shareId,
-          is_public: true,
-          content: copyText,
-          image_url: imageUrl,
-          created_at: new Date().toISOString(),
-        });
-
-      if (insertError2) {
-        throw new Error(`No se pudo guardar: ${insertError2.message}`);
-      }
+      throw new Error(`No se pudo guardar: ${insertError.message}`);
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://socialai-iota.vercel.app';
