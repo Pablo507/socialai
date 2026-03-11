@@ -15,7 +15,7 @@ async function getPost(shareId: string) {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('posts')
-      .select('share_id, copy_text, content, image_url, platform, created_at')
+      .select('share_id, copy_text, image_url, platform, created_at')
       .eq('share_id', shareId)
       .single();
     if (error) { console.error('getPost error:', error.message); return null; }
