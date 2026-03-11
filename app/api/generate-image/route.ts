@@ -1,4 +1,25 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+const MAX_FREE = 10;
 export const maxDuration = 30;
+
+async function getUsageCount(userId: string): Promise<number> {
+  const { data } = await supabase
+    .from('user_usage')
+    .select('generation_count')
+    .eq('user_id', userId)
+    .single();
+  return data?.generation_count ?? 0;
+}
+
+async function incrementUsage(userId: string) {
+  await supabase.rpc('increment_usage', { uid: userId });
+}
 
 async function getKeywordsFromGroq(prompt: string, industry: string): Promise<string[]> {
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -25,18 +46,13 @@ async function getKeywordsFromGroq(prompt: string, industry: string): Promise<st
   });
 
   if (!response.ok) throw new Error('Groq keyword error');
-
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content?.trim() || '[]';
-
   try {
     const clean = text.replace(/```json|```/g, '').trim();
     const keywords = JSON.parse(clean);
     if (Array.isArray(keywords) && keywords.length > 0) return keywords;
-  } catch {
-    // fallback si Groq no devuelve JSON válido
-  }
-
+  } catch {}
   return [prompt, `${industry} business`, 'marketing professional', 'small business'];
 }
 
@@ -46,14 +62,11 @@ async function fetchUnsplashImage(query: string, accessKey: string): Promise<str
     { headers: { Authorization: `Client-ID ${accessKey}` } }
   );
   if (!res.ok) return null;
-
   const data = await res.json();
   const imageUrl = data.urls?.regular;
   if (!imageUrl) return null;
-
   const imgRes = await fetch(imageUrl);
   if (!imgRes.ok) return null;
-
   const buffer = await imgRes.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
   const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
@@ -62,29 +75,35 @@ async function fetchUnsplashImage(query: string, accessKey: string): Promise<str
 
 export async function POST(request: Request) {
   try {
-    const { prompt, industry } = await request.json();
+    const { prompt, industry, userId } = await request.json();
     if (!prompt) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+    // Verificar límite si hay usuario logueado
+    if (userId) {
+      const count = await getUsageCount(userId);
+      if (count >= MAX_FREE) {
+        return Response.json({ error: 'limit_reached', limitReached: true }, { status: 403 });
+      }
+    }
 
-    // 1. Groq genera keywords en inglés alineadas al negocio
+    const accessKey = process.env.UNSPLASH_ACCESS_KEY;
     const keywords = await getKeywordsFromGroq(prompt, industry || '');
 
-    // 2. Buscar una imagen por keyword, en paralelo
     const imagePromises = keywords.map(async (keyword) => {
       const image = await fetchUnsplashImage(keyword, accessKey!);
       if (image) return image;
-      // fallback genérico si esa keyword no tiene resultados
       return fetchUnsplashImage('small business marketing', accessKey!);
     });
 
     const images = (await Promise.all(imagePromises)).filter(Boolean) as string[];
-
     if (images.length === 0) {
       return Response.json({ error: 'No se encontraron imágenes' }, { status: 500 });
     }
+
+    // Incrementar contador después de generación exitosa
+    if (userId) await incrementUsage(userId);
 
     return Response.json({ images });
 
