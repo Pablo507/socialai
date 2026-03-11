@@ -1,9 +1,39 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+const MAX_FREE = 10;
+
+async function getUsageCount(userId: string): Promise<number> {
+  const { data } = await supabase
+    .from('user_usage')
+    .select('generation_count')
+    .eq('user_id', userId)
+    .single();
+  return data?.generation_count ?? 0;
+}
+
+async function incrementUsage(userId: string) {
+  await supabase.rpc('increment_usage', { uid: userId });
+}
+
 export async function POST(request: Request) {
   try {
-    const { prompt, industry, goal, tone, platforms } = await request.json();
+    const { prompt, industry, goal, tone, platforms, userId } = await request.json();
 
     if (!prompt) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
+    }
+
+    // Verificar límite si hay usuario logueado
+    if (userId) {
+      const count = await getUsageCount(userId);
+      if (count >= MAX_FREE) {
+        return Response.json({ error: 'limit_reached', limitReached: true }, { status: 403 });
+      }
     }
 
     const platformList = platforms?.join(', ') || 'redes sociales';
@@ -48,8 +78,10 @@ No incluyas explicaciones ni comentarios, solo el copy.`;
 
     const data = await response.json();
     const copy = data.choices?.[0]?.message?.content?.trim();
-
     if (!copy) throw new Error('No se generó contenido');
+
+    // Incrementar contador después de generación exitosa
+    if (userId) await incrementUsage(userId);
 
     return Response.json({ copy });
 
