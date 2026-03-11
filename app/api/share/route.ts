@@ -14,10 +14,17 @@ export async function POST(request: Request) {
       return Response.json({ error: 'copyText requerido' }, { status: 400 });
     }
 
-    // 1. Subir imagen a Supabase Storage si viene en base64
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://socialai-iota.vercel.app';
+
+    // 1. Resolver la imagen
     let imageUrl: string | null = null;
 
-    if (imageBase64 && imageBase64.startsWith('data:')) {
+    if (imageBase64 && (imageBase64.startsWith('http://') || imageBase64.startsWith('https://'))) {
+      // URL pública (Unsplash, Fal.ai, etc.) — la pasamos por el proxy og-image
+      // para que WhatsApp pueda crawlearla sin problemas de CORS/dominio externo
+      imageUrl = `${appUrl}/api/og-image?url=${encodeURIComponent(imageBase64)}`;
+    } else if (imageBase64 && imageBase64.startsWith('data:')) {
+      // Base64 — subir a Supabase Storage
       const matches = imageBase64.match(/^data:(.+);base64,(.+)$/);
       if (matches) {
         const contentType = matches[1];
@@ -40,7 +47,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Generar un share_id único (8 chars, URL-friendly)
-    const shareId = randomBytes(4).toString('hex'); // ej: "a3f9c1d2"
+    const shareId = randomBytes(4).toString('hex');
 
     // 3. Guardar en la tabla posts con share_id e is_public
     const { error: insertError } = await supabase
@@ -59,7 +66,6 @@ export async function POST(request: Request) {
       throw new Error(`No se pudo guardar: ${insertError.message}`);
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://socialai-iota.vercel.app';
     const shareUrl = `${appUrl}/share/${shareId}`;
 
     return Response.json({ shareUrl, shareId });
@@ -69,3 +75,5 @@ export async function POST(request: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+   
