@@ -36,15 +36,6 @@ export default function DashboardPage() {
   const [videoUrl, setVideoUrl] = useState('');
   const [videoQueuePosition, setVideoQueuePosition] = useState<number|null>(null);
   const pollingRef = useRef<NodeJS.Timeout|null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showRightPanel, setShowRightPanel] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -512,31 +503,28 @@ export default function DashboardPage() {
       )}
 
       {/* NAV */}
-      <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding: isMobile ? '12px 16px' : '14px 32px', borderBottom:`1px solid ${C.border}`, background:C.surface, position:'sticky', top:0, zIndex:100 }}>
+      <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 32px', borderBottom:`1px solid ${C.border}`, background:C.surface, position:'sticky', top:0, zIndex:100 }}>
         <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:22, fontWeight:800, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
-        <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 6 : 12 }}>
-          {!isMobile && <div style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}55`, borderRadius:20, padding:'5px 14px', fontSize:12, color:C.accent, fontWeight:700 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}55`, borderRadius:20, padding:'5px 14px', fontSize:12, color:C.accent, fontWeight:700 }}>
             ✦ {remaining} generaciones restantes
-          </div>}
+          </div>
           {user
             ? <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                {!isMobile && <span style={{ fontSize:13, color:C.textMuted }}>👤 {user.email}</span>}
+                <span style={{ fontSize:13, color:C.textMuted }}>👤 {user.email}</span>
                 <button onClick={async () => { const s=createClient(); await s.auth.signOut(); window.location.href='/auth/login'; }}
                   style={{ background:'transparent', border:`1px solid ${C.border}`, color:C.textMuted, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
               </div>
             : <button onClick={() => window.location.href='/auth/login'}
                 style={{ background:'transparent', border:`1px solid ${C.border}`, color:C.textMuted, padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Iniciar sesión</button>
           }
-          {isMobile
-            ? <button onClick={() => setShowRightPanel(true)} style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}44`, color:C.accent, padding:'8px 12px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700 }}>👁️ Preview</button>
-            : <button onClick={() => setShowModal(true)} className="btn"
-                style={{ background:C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700, boxShadow:'0 3px 12px rgba(124,92,191,.28)' }}>Upgrade Pro</button>
-          }
+          <button onClick={() => setShowModal(true)} className="btn"
+            style={{ background:C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700, boxShadow:'0 3px 12px rgba(124,92,191,.28)' }}>Upgrade Pro</button>
         </div>
       </nav>
 
       {/* USAGE BAR */}
-      <div style={{ padding: isMobile ? '8px 16px' : '8px 32px', background:'#F3EFF9', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
+      <div style={{ padding:'8px 32px', background:'#F3EFF9', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
         <span style={{ fontSize:11, color:C.textDim }}>Plan gratuito</span>
         <div style={{ flex:1, height:5, background:'#E8E0F0', borderRadius:3, overflow:'hidden' }}>
           <div style={{ height:'100%', width:`${(usageCount/maxUsage)*100}%`, background:C.grad, borderRadius:2, transition:'width .5s' }} />
@@ -545,11 +533,11 @@ export default function DashboardPage() {
       </div>
 
       {/* LAYOUT */}
-      <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr 272px', minHeight:'calc(100vh - 97px)' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 272px', minHeight:'calc(100vh - 97px)' }}>
 
-        {/* SIDEBAR — oculto en mobile */}
-        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface, display: isMobile ? 'none' : 'block' }}>
-          {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
+        {/* SIDEBAR */}
+        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface }}>
+          {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
               style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:activePanel===id?C.accent:C.textMuted, fontSize:13, fontWeight:activePanel===id?700:500, border:activePanel===id?`1.5px solid ${C.accent}44`:'1.5px solid transparent', background:activePanel===id?C.accentSoft:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:3 }}>
               <span style={{ fontSize:15 }}>{icon}</span> {label}
@@ -563,7 +551,7 @@ export default function DashboardPage() {
         </aside>
 
         {/* MAIN */}
-        <main style={{ padding: isMobile ? '16px' : 28, overflowY:'auto', background:C.bg, minHeight:'calc(100vh - 97px)', paddingBottom: isMobile ? 80 : 28 }}>
+        <main style={{ padding:28, overflowY:'auto', background:C.bg, minHeight:'calc(100vh - 97px)' }}>
 
           {activePanel === 'copy' && (
             <div className="fade-in">
@@ -741,58 +729,11 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activePanel === 'calendar' && (
-            <div className="fade-in">
-              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>📅 Calendario Editorial</h1>
-              <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Planificá tus publicaciones del mes</p>
-              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22 }}>
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, fontWeight:700, marginBottom:16 }}>Marzo 2026</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
-                  {['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => (
-                    <div key={d} style={{ textAlign:'center', fontSize:10, color:C.textDim, padding:'5px 0', fontWeight:600, textTransform:'uppercase', letterSpacing:.5 }}>{d}</div>
-                  ))}
-                  {[1,2,3,4,5,6,7].map(d => (
-                    <div key={d} className="card" style={{ background:d===1?C.accentGlow:C.bg, border:d===1?`1px solid ${C.accent}55`:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:11, color:d===1?C.accent:C.textMuted, fontWeight:d===1?700:400 }}>{d}</div>
-                    </div>
-                  ))}
-                  {Array.from({length:24},(_,i)=>i+8).map(d => (
-                    <div key={d} className="card" style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:11, color:C.textDim }}>{d}</div>
-                      {d===10 && <div style={{ background:C.roseSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color:C.rose, marginTop:3 }}>📸 Post</div>}
-                      {d===15 && <div style={{ background:'#6B9FD422', borderRadius:4, padding:'2px 5px', fontSize:9, color:'#6B9FD4', marginTop:3 }}>📘 Reel</div>}
-                      {d===20 && <div style={{ background:C.goldSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color:C.gold, marginTop:3 }}>🎵 TikTok</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </main>
 
         {/* RIGHT PANEL */}
-        {isMobile && showRightPanel && (
-          <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.55)', backdropFilter:'blur(8px)', zIndex:400 }}
-            onClick={e => e.target===e.currentTarget && setShowRightPanel(false)} />
-        )}
-        <aside style={ isMobile ? {
-          position:'fixed' as const, bottom:0, left:0, right:0,
-          background:'#FFFFFF', zIndex:402,
-          transform: showRightPanel ? 'translateY(0)' : 'translateY(110%)',
-          transition:'transform 0.3s ease',
-          maxHeight:'85vh', overflowY:'auto' as const,
-          borderRadius:'20px 20px 0 0',
-          padding:'20px 14px 90px',
-          boxShadow:'0 -8px 40px rgba(45,38,64,.18)',
-        } : {
-          borderLeft:'1px solid #E8E0F0', padding:'20px 14px', overflowY:'auto' as const, background:'#FFFFFF'
-        }}>
-          {isMobile && (
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-              <div style={{ fontSize:14, fontWeight:700 }}>Vista previa y publicar</div>
-              <button onClick={() => setShowRightPanel(false)} style={{ background:'transparent', border:'none', fontSize:22, cursor:'pointer', lineHeight:1 }}>✕</button>
-            </div>
-          )}
+        <aside style={{ borderLeft:`1px solid ${C.border}`, padding:'20px 14px', overflowY:'auto', background:C.surface }}>
+
           {/* CONEXIÓN FACEBOOK */}
           <div style={{ marginBottom:16 }}>
             <div style={{ fontSize:10, fontWeight:700, marginBottom:12, color:C.textDim, textTransform:'uppercase', letterSpacing:1.5 }}>Cuenta conectada</div>
@@ -901,24 +842,6 @@ export default function DashboardPage() {
           ))}
         </aside>
       </div>
-
-      {/* BOTTOM TAB BAR — solo mobile */}
-      {isMobile && (
-        <nav style={{ position:'fixed', bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, display:'flex', zIndex:200, paddingBottom:'env(safe-area-inset-bottom)' }}>
-          {[['✍️','Copy','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
-            <button key={id} onClick={() => setActivePanel(id)}
-              style={{ flex:1, padding:'10px 4px 8px', background:'transparent', border:'none', cursor:'pointer', display:'flex', flexDirection:'column' as const, alignItems:'center', gap:3, color:activePanel===id?C.accent:C.textMuted, fontFamily:'inherit' }}>
-              <span style={{ fontSize:18 }}>{icon}</span>
-              <span style={{ fontSize:9, fontWeight:activePanel===id?700:500 }}>{label}</span>
-            </button>
-          ))}
-          <button onClick={() => setShowModal(true)}
-            style={{ flex:1, padding:'10px 4px 8px', background:'transparent', border:'none', cursor:'pointer', display:'flex', flexDirection:'column' as const, alignItems:'center', gap:3, color:C.accent, fontFamily:'inherit' }}>
-            <span style={{ fontSize:18 }}>⚡</span>
-            <span style={{ fontSize:9, fontWeight:700 }}>Pro</span>
-          </button>
-        </nav>
-      )}
 
       {/* UPGRADE MODAL */}
       {showModal && (
