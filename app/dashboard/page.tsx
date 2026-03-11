@@ -98,10 +98,14 @@ export default function DashboardPage() {
 
   async function loadHistory(userId: string) {
     try {
-      const res = await fetch(`/api/get-history?userId=${userId}`);
-      const data = await res.json();
-      setHistory(data.posts || []);
-      setUsageCount(data.posts?.length || 0);
+      const [histRes, usageRes] = await Promise.all([
+        fetch(`/api/get-history?userId=${userId}`),
+        fetch(`/api/get-usage?userId=${userId}`),
+      ]);
+      const histData = await histRes.json();
+      const usageData = await usageRes.json();
+      setHistory(histData.posts || []);
+      setUsageCount(usageData.count ?? 0);
     } catch {}
   }
 
@@ -286,14 +290,15 @@ export default function DashboardPage() {
       const res = await fetch('/api/generate-copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms }),
+        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms, userId: user?.id }),
       });
       const data = await res.json();
+      if (data.limitReached) { setShowModal(true); return; }
       if (data.copy) {
         setCopyResult(data.copy);
         setPreviewContent(data.copy.substring(0, 150) + '...');
-        setUsageCount(c => c + 1);
         if (user) loadHistory(user.id);
+        else setUsageCount(c => c + 1);
       } else { alert('Error: ' + data.error); }
     } catch { alert('Error de conexión'); }
     setCopyLoading(false);
@@ -312,7 +317,12 @@ export default function DashboardPage() {
         body: JSON.stringify({ prompt, userId: user?.id }),
       });
       const data = await res.json();
-      if (data.images) { setImages(data.images); setUsageCount(c => c + 1); }
+      if (data.limitReached) { setShowModal(true); return; }
+      if (data.images) {
+        setImages(data.images);
+        if (user) loadHistory(user.id);
+        else setUsageCount(c => c + 1);
+      }
       else { alert('Error: ' + data.error); }
     } catch { alert('Error de conexión'); }
     setImageLoading(false);
@@ -537,7 +547,7 @@ export default function DashboardPage() {
 
         {/* SIDEBAR */}
         <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface }}>
-          {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos']].map(([icon,label,id]) => (
+          {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
               style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:activePanel===id?C.accent:C.textMuted, fontSize:13, fontWeight:activePanel===id?700:500, border:activePanel===id?`1.5px solid ${C.accent}44`:'1.5px solid transparent', background:activePanel===id?C.accentSoft:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:3 }}>
               <span style={{ fontSize:15 }}>{icon}</span> {label}
@@ -729,6 +739,33 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {activePanel === 'calendar' && (
+            <div className="fade-in">
+              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>📅 Calendario Editorial</h1>
+              <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Planificá tus publicaciones del mes</p>
+              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22 }}>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, fontWeight:700, marginBottom:16 }}>Marzo 2026</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
+                  {['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => (
+                    <div key={d} style={{ textAlign:'center', fontSize:10, color:C.textDim, padding:'5px 0', fontWeight:600, textTransform:'uppercase', letterSpacing:.5 }}>{d}</div>
+                  ))}
+                  {[1,2,3,4,5,6,7].map(d => (
+                    <div key={d} className="card" style={{ background:d===1?C.accentGlow:C.bg, border:d===1?`1px solid ${C.accent}55`:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
+                      <div style={{ fontSize:11, color:d===1?C.accent:C.textMuted, fontWeight:d===1?700:400 }}>{d}</div>
+                    </div>
+                  ))}
+                  {Array.from({length:24},(_,i)=>i+8).map(d => (
+                    <div key={d} className="card" style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
+                      <div style={{ fontSize:11, color:C.textDim }}>{d}</div>
+                      {d===10 && <div style={{ background:C.roseSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color:C.rose, marginTop:3 }}>📸 Post</div>}
+                      {d===15 && <div style={{ background:'#6B9FD422', borderRadius:4, padding:'2px 5px', fontSize:9, color:'#6B9FD4', marginTop:3 }}>📘 Reel</div>}
+                      {d===20 && <div style={{ background:C.goldSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color:C.gold, marginTop:3 }}>🎵 TikTok</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </main>
 
         {/* RIGHT PANEL */}
