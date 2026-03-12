@@ -290,15 +290,14 @@ export default function DashboardPage() {
       const res = await fetch('/api/generate-copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms, userId: user?.id }),
+        body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms }),
       });
       const data = await res.json();
-      if (data.limitReached) { setShowModal(true); return; }
       if (data.copy) {
         setCopyResult(data.copy);
         setPreviewContent(data.copy.substring(0, 150) + '...');
-        if (user) loadHistory(user.id);
-        else setUsageCount(c => c + 1);
+        setUsageCount(c => c + 1);
+        if (user) setTimeout(() => loadHistory(user.id), 1000);
       } else { alert('Error: ' + data.error); }
     } catch { alert('Error de conexión'); }
     setCopyLoading(false);
@@ -317,11 +316,10 @@ export default function DashboardPage() {
         body: JSON.stringify({ prompt, userId: user?.id }),
       });
       const data = await res.json();
-      if (data.limitReached) { setShowModal(true); return; }
       if (data.images) {
         setImages(data.images);
-        if (user) loadHistory(user.id);
-        else setUsageCount(c => c + 1);
+        setUsageCount(c => c + 1);
+        if (user) setTimeout(() => loadHistory(user.id), 1000);
       }
       else { alert('Error: ' + data.error); }
     } catch { alert('Error de conexión'); }
