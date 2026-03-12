@@ -557,7 +557,7 @@ export default function DashboardPage() {
 
         {/* SIDEBAR */}
         <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface, display: isMobile ? 'none' : 'block' }}>
-          {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
+          {([['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos']] as [string,string,string][]).map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
               style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:activePanel===id?C.accent:C.textMuted, fontSize:13, fontWeight:activePanel===id?700:500, border:activePanel===id?`1.5px solid ${C.accent}44`:'1.5px solid transparent', background:activePanel===id?C.accentSoft:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:3 }}>
               <span style={{ fontSize:15 }}>{icon}</span> {label}
@@ -749,33 +749,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activePanel === 'calendar' && (
-            <div className="fade-in">
-              <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>📅 Calendario Editorial</h1>
-              <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Planificá tus publicaciones del mes</p>
-              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:22 }}>
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, fontWeight:700, marginBottom:16 }}>Marzo 2026</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
-                  {['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => (
-                    <div key={d} style={{ textAlign:'center', fontSize:10, color:C.textDim, padding:'5px 0', fontWeight:600, textTransform:'uppercase', letterSpacing:.5 }}>{d}</div>
-                  ))}
-                  {[1,2,3,4,5,6,7].map(d => (
-                    <div key={d} className="card" style={{ background:d===1?C.accentGlow:C.bg, border:d===1?`1px solid ${C.accent}55`:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:11, color:d===1?C.accent:C.textMuted, fontWeight:d===1?700:400 }}>{d}</div>
-                    </div>
-                  ))}
-                  {Array.from({length:24},(_,i)=>i+8).map(d => (
-                    <div key={d} className="card" style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, minHeight:68, padding:6, cursor:'pointer' }}>
-                      <div style={{ fontSize:11, color:C.textDim }}>{d}</div>
-                      {d===10 && <div style={{ background:C.roseSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color:C.rose, marginTop:3 }}>📸 Post</div>}
-                      {d===15 && <div style={{ background:'#6B9FD422', borderRadius:4, padding:'2px 5px', fontSize:9, color:'#6B9FD4', marginTop:3 }}>📘 Reel</div>}
-                      {d===20 && <div style={{ background:C.goldSoft, borderRadius:4, padding:'2px 5px', fontSize:9, color:C.gold, marginTop:3 }}>🎵 TikTok</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+
         </main>
 
         {/* RIGHT PANEL */}
@@ -954,8 +928,14 @@ export default function DashboardPage() {
                 <div style={{ fontSize:11, color:C.textMuted, marginTop:6 }}>✓ Ilimitado + Videos</div>
               </div>
             </div>
-            <button onClick={() => setShowModal(false)} className="btn"
-              style={{ background:C.grad, border:'none', color:'#fff', padding:'12px 28px', borderRadius:10, fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, cursor:'pointer', width:'100%', marginBottom:10 }}>
+            <button onClick={async () => {
+                if (!user) { window.location.href='/auth/login'; return; }
+                const r = await fetch('/api/create-subscription', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({plan:'pro'}) });
+                const d = await r.json();
+                if (d.checkout_url) window.location.href = d.checkout_url;
+                else alert('Error: ' + (d.error || 'No se pudo iniciar el pago'));
+              }} className="btn"
+              style={{ background:C.grad, border:'none', color:'#fff', padding:'12px 28px', borderRadius:10, fontFamily:"'Nunito',sans-serif", fontSize:15, fontWeight:700, cursor:'pointer', width:'100%', marginBottom:10 }}>
               💙 Suscribirse con Mercado Pago
             </button>
             <button onClick={() => setShowModal(false)}
@@ -968,4 +948,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
