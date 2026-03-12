@@ -33,8 +33,8 @@ export default function DashboardPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoStatus, setVideoStatus] = useState<'idle'|'processing'|'completed'|'failed'>('idle');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [videoQueuePosition, setVideoQueuePosition] = useState<number|null>(null);
+  const [videoResults, setVideoResults] = useState<{url:string,thumbnail:string,duration:number,photographer:string}[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState('');
   const pollingRef = useRef<NodeJS.Timeout|null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showRightPanel, setShowRightPanel] = useState(false);
@@ -338,34 +338,25 @@ export default function DashboardPage() {
   async function generateVideo() {
     if (checkUsage()) return;
     if (!videoPrompt.trim()) { alert('Describí tu idea'); return; }
-    setVideoStatus('processing'); setVideoUrl(''); setVideoQueuePosition(null);
+    setVideoStatus('processing'); setVideoResults([]); setSelectedVideo('');
     try {
       const res = await fetch('/api/generate-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: videoPrompt }),
+        body: JSON.stringify({ prompt: videoPrompt, userId: user?.id }),
       });
       const data = await res.json();
-      if (data.requestId) { setUsageCount(c => c + 1); startPolling(data.requestId); }
-      else { setVideoStatus('failed'); }
+      if (data.limitReached) { setShowModal(true); setVideoStatus('idle'); return; }
+      if (data.videos?.length > 0) {
+        setVideoResults(data.videos);
+        setSelectedVideo(data.videos[0].url);
+        setVideoStatus('completed');
+        setUsageCount(c => c + 1);
+        if (user) setTimeout(() => loadHistory(user.id), 1000);
+      } else {
+        setVideoStatus('failed');
+      }
     } catch { setVideoStatus('failed'); }
-  }
-
-  function startPolling(requestId: string) {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/video-status?requestId=${requestId}`);
-        const data = await res.json();
-        if (data.status === 'completed' && data.videoUrl) {
-          setVideoUrl(data.videoUrl); setVideoStatus('completed');
-          if (pollingRef.current) clearInterval(pollingRef.current);
-        } else if (data.status === 'failed') {
-          setVideoStatus('failed');
-          if (pollingRef.current) clearInterval(pollingRef.current);
-        } else { setVideoQueuePosition(data.queuePosition ?? null); }
-      } catch {}
-    }, 5000);
   }
 
   function loadPost(post: any) {
@@ -696,53 +687,77 @@ export default function DashboardPage() {
           {activePanel === 'videos' && (
             <div className="fade-in">
               <h1 style={{ fontFamily:"'Nunito',sans-serif", fontSize:24, fontWeight:800, marginBottom:4 }}>🎬 Generador de Videos</h1>
-              <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Videos cortos para Reels y TikTok</p>
+              <p style={{ color:C.textMuted, fontSize:13, marginBottom:24 }}>Videos stock listos para Reels y TikTok · powered by Pexels</p>
 
               <div style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:18, padding:24, marginBottom:20, boxShadow:'0 2px 16px rgba(124,92,191,.06)' }}>
-                <label style={labelStyle}>Describe tu video</label>
-                <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} style={{ ...inputStyle, marginBottom:14, resize:'vertical' } as React.CSSProperties}
+                <label style={labelStyle}>Describí tu video</label>
+                <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} style={{ ...inputStyle, marginBottom:16, resize:'vertical' } as React.CSSProperties}
                   rows={3} placeholder="Ej: café siendo servido en cámara lenta, vapor y luz cálida..." />
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
-                  <div><label style={labelStyle}>Formato</label>
-                    <select style={inputStyle}><option>📱 Vertical 9:16</option><option>⬜ Cuadrado 1:1</option><option>🖥️ Horizontal 16:9</option></select>
-                  </div>
-                  <div><label style={labelStyle}>Duración</label>
-                    <select style={inputStyle}><option>5 segundos</option><option>10 segundos</option></select>
-                  </div>
-                </div>
                 <button onClick={generateVideo} disabled={videoStatus==='processing'} className="btn"
-                  style={{ width:'100%', background:videoStatus==='processing'?C.border:C.grad, border:'none', color:'#fff', padding:13, borderRadius:11, fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, cursor:videoStatus==='processing'?'not-allowed':'pointer' }}>
-                  {videoStatus==='processing' ? '⏳ Generando video...' : '🎬 Generar Video con IA'}
+                  style={{ width:'100%', background:videoStatus==='processing'?C.border:C.grad, border:'none', color:'#fff', padding:14, borderRadius:14, fontFamily:"'Nunito',sans-serif", fontSize:15, fontWeight:800, cursor:videoStatus==='processing'?'not-allowed':'pointer', boxShadow:videoStatus==='processing'?'none':'0 4px 18px rgba(124,92,191,.32)' }}>
+                  {videoStatus==='processing' ? '⏳ Buscando videos...' : '🎬 Generar Videos con IA'}
                 </button>
               </div>
 
               {videoStatus==='processing' && (
                 <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:32, textAlign:'center' }}>
-                  <div style={{ fontSize:36, marginBottom:12, animation:'shimmer 2s infinite' }}>⏳</div>
-                  <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, fontWeight:600, marginBottom:8 }}>Generando con IA...</div>
-                  <div style={{ fontSize:13, color:C.textMuted, marginBottom:16 }}>{videoQueuePosition!==null?`Cola: #${videoQueuePosition} · `:''}30–60 segundos</div>
-                  <div style={{ height:3, background:C.border, borderRadius:2, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:'55%', background:C.grad, borderRadius:2, animation:'shimmer 2s infinite' }} />
-                  </div>
+                  <div style={{ fontSize:36, marginBottom:12, animation:'shimmer 2s infinite' }}>🎬</div>
+                  <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:16, fontWeight:700, marginBottom:8 }}>Buscando videos...</div>
+                  <div style={{ fontSize:13, color:C.textMuted }}>Unos segundos</div>
                 </div>
               )}
 
-              {videoStatus==='completed' && videoUrl && (
-                <div style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
+              {videoStatus==='completed' && videoResults.length > 0 && (
+                <div className="fade-in" style={{ background:C.surface, border:`1px solid ${C.borderLight}`, borderRadius:16, overflow:'hidden' }}>
                   <div style={{ padding:'12px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', background:'#F8F5FF' }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:C.accent }}>✦ Video listo</span>
-                    <a href={videoUrl} download target="_blank" rel="noreferrer" style={{ padding:'5px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:'transparent', color:C.textMuted, fontSize:11, textDecoration:'none' }}>⬇️ Descargar</a>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.accent }}>✦ {videoResults.length} videos encontrados</span>
+                    <span style={{ fontSize:11, color:C.textMuted }}>Click para seleccionar →</span>
                   </div>
-                  <div style={{ padding:16 }}>
-                    <video controls style={{ width:'100%', borderRadius:8, maxHeight:360 }}><source src={videoUrl} type="video/mp4" /></video>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:16 }}>
+                    {videoResults.map((v, i) => (
+                      <div key={i} onClick={() => setSelectedVideo(v.url)} className="card"
+                        style={{ background:C.bg, border:selectedVideo===v.url?`2px solid ${C.accent}`:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden', cursor:'pointer', boxShadow:selectedVideo===v.url?`0 0 16px ${C.accentGlow}`:'none' }}>
+                        <div style={{ position:'relative', height:120 }}>
+                          <img src={v.thumbnail} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                          <div style={{ position:'absolute', bottom:5, right:5, background:'rgba(0,0,0,.65)', borderRadius:4, padding:'2px 6px', fontSize:10, color:'#fff' }}>
+                            {v.duration}s
+                          </div>
+                          {selectedVideo===v.url && (
+                            <div style={{ position:'absolute', inset:0, background:'rgba(124,92,191,.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                              <span style={{ fontSize:24 }}>✓</span>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ padding:'7px 10px', fontSize:10, color:selectedVideo===v.url?C.accent:C.textMuted, fontWeight:selectedVideo===v.url?600:400 }}>
+                          {selectedVideo===v.url?'✓ Seleccionado':'Versión '}{String.fromCharCode(65+i)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                  {selectedVideo && (
+                    <div style={{ padding:'0 16px 16px' }}>
+                      <video key={selectedVideo} controls style={{ width:'100%', borderRadius:10, maxHeight:300 }}>
+                        <source src={selectedVideo} type="video/mp4" />
+                      </video>
+                      <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                        <a href={selectedVideo} download target="_blank" rel="noreferrer" className="btn"
+                          style={{ flex:1, background:C.grad, color:'#fff', padding:'10px 14px', borderRadius:10, fontSize:13, fontWeight:700, textAlign:'center', textDecoration:'none', display:'block' }}>
+                          ⬇️ Descargar
+                        </a>
+                        <button onClick={generateVideo} className="btn"
+                          style={{ flex:1, background:'transparent', border:`1px solid ${C.border}`, color:C.textMuted, padding:'10px 14px', borderRadius:10, fontSize:13, cursor:'pointer' }}>
+                          🔄 Buscar más
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {videoStatus==='failed' && (
                 <div style={{ background:C.roseSoft, border:`1px solid ${C.rose}44`, borderRadius:16, padding:24, textAlign:'center' }}>
                   <div style={{ fontSize:28, marginBottom:8 }}>❌</div>
-                  <div style={{ fontSize:13, color:C.rose, marginBottom:12 }}>Error al generar el video.</div>
+                  <div style={{ fontSize:13, color:C.rose, marginBottom:12 }}>No se encontraron videos. Intentá con otro término.</div>
                   <button onClick={() => setVideoStatus('idle')} style={{ padding:'8px 18px', borderRadius:8, border:`1px solid ${C.border}`, background:'transparent', color:C.textMuted, cursor:'pointer', fontSize:13 }}>Reintentar</button>
                 </div>
               )}
