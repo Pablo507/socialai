@@ -36,6 +36,15 @@ export default function DashboardPage() {
   const [videoUrl, setVideoUrl] = useState('');
   const [videoQueuePosition, setVideoQueuePosition] = useState<number|null>(null);
   const pollingRef = useRef<NodeJS.Timeout|null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showRightPanel, setShowRightPanel] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -511,28 +520,31 @@ export default function DashboardPage() {
       )}
 
       {/* NAV */}
-      <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 32px', borderBottom:`1px solid ${C.border}`, background:C.surface, position:'sticky', top:0, zIndex:100 }}>
+      <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding: isMobile ? '12px 16px' : '14px 32px', borderBottom:`1px solid ${C.border}`, background:C.surface, position:'sticky', top:0, zIndex:100 }}>
         <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:22, fontWeight:800, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}55`, borderRadius:20, padding:'5px 14px', fontSize:12, color:C.accent, fontWeight:700 }}>
+        <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 6 : 12 }}>
+          {!isMobile && <div style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}55`, borderRadius:20, padding:'5px 14px', fontSize:12, color:C.accent, fontWeight:700 }}>
             ✦ {remaining} generaciones restantes
-          </div>
+          </div>}
           {user
             ? <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:13, color:C.textMuted }}>👤 {user.email}</span>
+                {!isMobile && <span style={{ fontSize:13, color:C.textMuted }}>👤 {user.email}</span>}
                 <button onClick={async () => { const s=createClient(); await s.auth.signOut(); window.location.href='/auth/login'; }}
                   style={{ background:'transparent', border:`1px solid ${C.border}`, color:C.textMuted, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Salir</button>
               </div>
             : <button onClick={() => window.location.href='/auth/login'}
                 style={{ background:'transparent', border:`1px solid ${C.border}`, color:C.textMuted, padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13 }}>Iniciar sesión</button>
           }
-          <button onClick={() => setShowModal(true)} className="btn"
-            style={{ background:C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700, boxShadow:'0 3px 12px rgba(124,92,191,.28)' }}>Upgrade Pro</button>
+          {isMobile
+            ? <button onClick={() => setShowRightPanel(true)} style={{ background:C.accentSoft, border:`1.5px solid ${C.accent}44`, color:C.accent, padding:'7px 12px', borderRadius:10, cursor:'pointer', fontSize:12, fontWeight:700 }}>👁️ Preview</button>
+            : <button onClick={() => setShowModal(true)} className="btn"
+                style={{ background:C.grad, border:'none', color:'#fff', padding:'8px 18px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700, boxShadow:'0 3px 12px rgba(124,92,191,.28)' }}>Upgrade Pro</button>
+          }
         </div>
       </nav>
 
       {/* USAGE BAR */}
-      <div style={{ padding:'8px 32px', background:'#F3EFF9', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
+      <div style={{ padding: isMobile ? '8px 16px' : '8px 32px', background:'#F3EFF9', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:14 }}>
         <span style={{ fontSize:11, color:C.textDim }}>Plan gratuito</span>
         <div style={{ flex:1, height:5, background:'#E8E0F0', borderRadius:3, overflow:'hidden' }}>
           <div style={{ height:'100%', width:`${(usageCount/maxUsage)*100}%`, background:C.grad, borderRadius:2, transition:'width .5s' }} />
@@ -541,10 +553,10 @@ export default function DashboardPage() {
       </div>
 
       {/* LAYOUT */}
-      <div style={{ display:'grid', gridTemplateColumns:'200px 1fr 272px', minHeight:'calc(100vh - 97px)' }}>
+      <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr 272px', minHeight:'calc(100vh - 97px)' }}>
 
         {/* SIDEBAR */}
-        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface }}>
+        <aside style={{ borderRight:`1px solid ${C.border}`, padding:'20px 10px', background:C.surface, display: isMobile ? 'none' : 'block' }}>
           {[['✍️','Copywriting','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos'],['📅','Calendario','calendar']].map(([icon,label,id]) => (
             <button key={id} onClick={() => setActivePanel(id)}
               style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', color:activePanel===id?C.accent:C.textMuted, fontSize:13, fontWeight:activePanel===id?700:500, border:activePanel===id?`1.5px solid ${C.accent}44`:'1.5px solid transparent', background:activePanel===id?C.accentSoft:'transparent', width:'100%', textAlign:'left', fontFamily:'inherit', marginBottom:3 }}>
@@ -559,7 +571,7 @@ export default function DashboardPage() {
         </aside>
 
         {/* MAIN */}
-        <main style={{ padding:28, overflowY:'auto', background:C.bg, minHeight:'calc(100vh - 97px)' }}>
+        <main style={{ padding: isMobile ? 16 : 28, overflowY:'auto', background:C.bg, minHeight:'calc(100vh - 97px)', paddingBottom: isMobile ? 80 : 28 }}>
 
           {activePanel === 'copy' && (
             <div className="fade-in">
@@ -767,7 +779,26 @@ export default function DashboardPage() {
         </main>
 
         {/* RIGHT PANEL */}
-        <aside style={{ borderLeft:`1px solid ${C.border}`, padding:'20px 14px', overflowY:'auto', background:C.surface }}>
+        {isMobile && showRightPanel && (
+          <div onClick={() => setShowRightPanel(false)}
+            style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.5)', zIndex:400 }} />
+        )}
+        <aside style={ isMobile ? {
+          position:'fixed' as const, bottom:0, left:0, right:0, zIndex:401,
+          background:C.surface,
+          transform: showRightPanel ? 'translateY(0)' : 'translateY(110%)',
+          transition:'transform 0.3s ease',
+          maxHeight:'85vh', overflowY:'auto' as const,
+          borderRadius:'20px 20px 0 0',
+          padding:'16px 14px 90px',
+          boxShadow:'0 -8px 40px rgba(45,38,64,.15)',
+        } : { borderLeft:`1px solid ${C.border}`, padding:'20px 14px', overflowY:'auto' as const, background:C.surface }}>
+          {isMobile && (
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:C.text }}>Vista previa y publicar</div>
+              <button onClick={() => setShowRightPanel(false)} style={{ background:'transparent', border:'none', fontSize:22, cursor:'pointer', color:C.textMuted, lineHeight:1 }}>✕</button>
+            </div>
+          )}
 
           {/* CONEXIÓN FACEBOOK */}
           <div style={{ marginBottom:16 }}>
@@ -878,6 +909,29 @@ export default function DashboardPage() {
         </aside>
       </div>
 
+      {/* BOTTOM TAB BAR — solo mobile */}
+      {isMobile && (
+        <nav style={{ position:'fixed', bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, display:'flex', zIndex:300 }}>
+          {([['✍️','Copy','copy'],['🖼️','Imágenes','images'],['🎬','Videos','videos']] as [string,string,string][]).map(([icon,label,id]) => (
+            <button key={id} onClick={() => { setActivePanel(id); setShowRightPanel(false); }}
+              style={{ flex:1, padding:'10px 4px 8px', background:'transparent', border:'none', cursor:'pointer', display:'flex', flexDirection:'column' as const, alignItems:'center', gap:2, color:activePanel===id?C.accent:C.textMuted, fontFamily:'inherit' }}>
+              <span style={{ fontSize:18 }}>{icon}</span>
+              <span style={{ fontSize:9, fontWeight:activePanel===id?700:500 }}>{label}</span>
+            </button>
+          ))}
+          <button onClick={() => { setShowRightPanel(true); }}
+            style={{ flex:1, padding:'10px 4px 8px', background:'transparent', border:'none', cursor:'pointer', display:'flex', flexDirection:'column' as const, alignItems:'center', gap:2, color:showRightPanel?C.accent:C.textMuted, fontFamily:'inherit' }}>
+            <span style={{ fontSize:18 }}>👁️</span>
+            <span style={{ fontSize:9, fontWeight:700 }}>Preview</span>
+          </button>
+          <button onClick={() => setShowModal(true)}
+            style={{ flex:1, padding:'10px 4px 8px', background:'transparent', border:'none', cursor:'pointer', display:'flex', flexDirection:'column' as const, alignItems:'center', gap:2, color:C.accent, fontFamily:'inherit' }}>
+            <span style={{ fontSize:18 }}>⚡</span>
+            <span style={{ fontSize:9, fontWeight:700 }}>Pro</span>
+          </button>
+        </nav>
+      )}
+
       {/* UPGRADE MODAL */}
       {showModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(45,38,64,.50)', backdropFilter:'blur(12px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
@@ -914,3 +968,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
