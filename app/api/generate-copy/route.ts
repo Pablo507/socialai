@@ -28,18 +28,18 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    // Verificar límite si hay usuario logueado
+    // Verificar límite si hay usuario autenticado
     if (userId) {
       const count = await getUsageCount(userId);
       if (count >= MAX_FREE) {
-        return Response.json({ error: 'limit_reached', limitReached: true }, { status: 403 });
+        return Response.json({ limitReached: true });
       }
     }
 
     const platformList = platforms?.join(', ') || 'redes sociales';
 
     const systemPrompt = `Eres un experto en marketing digital y copywriting para redes sociales latinoamericanas.
-Escribes copies persuasivos, creativos y adaptados al español rioplatense (Uruguay/Argentina).
+Escribís copies persuasivos, creativos y adaptados al español rioplatense (Uruguay/Argentina).
 Siempre incluís emojis relevantes, hashtags populares y llamados a la acción efectivos.
 Tu escritura es natural, auténtica y conecta emocionalmente con la audiencia.`;
 
@@ -51,7 +51,7 @@ Tu escritura es natural, auténtica y conecta emocionalmente con la audiencia.`;
 - Tono: ${tone || 'Amigable'}
 - Producto/Idea: ${prompt}
 
-Escribe UN copy completo y listo para publicar. Incluí emojis, saltos de línea para mejor lectura, y hashtags al final.
+Escribí UN copy completo y listo para publicar. Incluí emojis, saltos de línea para mejor lectura, y hashtags al final.
 No incluyas explicaciones ni comentarios, solo el copy.`;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -78,10 +78,24 @@ No incluyas explicaciones ni comentarios, solo el copy.`;
 
     const data = await response.json();
     const copy = data.choices?.[0]?.message?.content?.trim();
+
     if (!copy) throw new Error('No se generó contenido');
 
     // Incrementar contador después de generación exitosa
-    if (userId) await incrementUsage(userId);
+    if (userId) {
+      await incrementUsage(userId);
+
+      // Guardar en historial
+      await supabase.from('posts').insert({
+        user_id: userId,
+        prompt,
+        copy_text: copy,
+        platform: platforms?.[0]?.toLowerCase() || 'general',
+        industry: industry || 'General',
+        goal: goal || 'Generar engagement',
+        created_at: new Date().toISOString(),
+      });
+    }
 
     return Response.json({ copy });
 
