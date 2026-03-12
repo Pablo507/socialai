@@ -16,7 +16,6 @@ export default function DashboardPage() {
   const [sharePlatform, setSharePlatform] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
-  const [previewVideo, setPreviewVideo] = useState<string>('');
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
   const [user, setUser] = useState<any>(null);
   const [imagePrompt, setImagePrompt] = useState('');
