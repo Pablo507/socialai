@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const [sharePlatform, setSharePlatform] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
+  const [previewVideo, setPreviewVideo] = useState<string>('');
   const [previewContent, setPreviewContent] = useState('Tu contenido aparecerá aquí...');
   const [user, setUser] = useState<any>(null);
   const [imagePrompt, setImagePrompt] = useState('');
@@ -35,6 +36,7 @@ export default function DashboardPage() {
   const [videoStatus, setVideoStatus] = useState<'idle'|'processing'|'completed'|'failed'>('idle');
   const [videoResults, setVideoResults] = useState<{url:string,thumbnail:string,duration:number,photographer:string}[]>([]);
   const [selectedVideo, setSelectedVideo] = useState('');
+  const [previewVideo, setPreviewVideo] = useState('');
   const pollingRef = useRef<NodeJS.Timeout|null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showRightPanel, setShowRightPanel] = useState(false);
@@ -350,12 +352,11 @@ export default function DashboardPage() {
       if (data.videos?.length > 0) {
         setVideoResults(data.videos);
         setSelectedVideo(data.videos[0].url);
+        setPreviewVideo(data.videos[0].url);
         setVideoStatus('completed');
         setUsageCount(c => c + 1);
         if (user) setTimeout(() => loadHistory(user.id), 1000);
-      } else {
-        setVideoStatus('failed');
-      }
+      } else { setVideoStatus('failed'); }
     } catch { setVideoStatus('failed'); }
   }
 
@@ -365,7 +366,7 @@ export default function DashboardPage() {
   }
 
   const remaining = maxUsage - usageCount;
-  const hasContent = !!(copyResult || previewImage);
+  const hasContent = !!(copyResult || previewImage || previewVideo);
   const currentText = copyResult || previewContent;
 
   const C = {
@@ -715,7 +716,7 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:16 }}>
                     {videoResults.map((v, i) => (
-                      <div key={i} onClick={() => setSelectedVideo(v.url)} className="card"
+                      <div key={i} onClick={() => { setSelectedVideo(v.url); setPreviewVideo(v.url); }} className="card"
                         style={{ background:C.bg, border:selectedVideo===v.url?`2px solid ${C.accent}`:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden', cursor:'pointer', boxShadow:selectedVideo===v.url?`0 0 16px ${C.accentGlow}`:'none' }}>
                         <div style={{ position:'relative', height:120 }}>
                           <img src={v.thumbnail} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
@@ -724,7 +725,7 @@ export default function DashboardPage() {
                           </div>
                           {selectedVideo===v.url && (
                             <div style={{ position:'absolute', inset:0, background:'rgba(124,92,191,.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                              <span style={{ fontSize:24 }}>✓</span>
+                              <span style={{ fontSize:24, color:'#fff' }}>✓</span>
                             </div>
                           )}
                         </div>
@@ -741,7 +742,7 @@ export default function DashboardPage() {
                       </video>
                       <div style={{ display:'flex', gap:8, marginTop:10 }}>
                         <a href={selectedVideo} download target="_blank" rel="noreferrer" className="btn"
-                          style={{ flex:1, background:C.grad, color:'#fff', padding:'10px 14px', borderRadius:10, fontSize:13, fontWeight:700, textAlign:'center', textDecoration:'none', display:'block' }}>
+                          style={{ flex:1, background:C.grad, color:'#fff', padding:'10px 14px', borderRadius:10, fontSize:13, fontWeight:700, textAlign:'center' as const, textDecoration:'none', display:'block' }}>
                           ⬇️ Descargar
                         </a>
                         <button onClick={generateVideo} className="btn"
@@ -820,9 +821,14 @@ export default function DashboardPage() {
               </div>
             </div>
             <div style={{ height:150, overflow:'hidden', position:'relative', background:'linear-gradient(135deg,#EDE8F8,#FEF0E7)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {previewImage ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" /> : <span style={{ fontSize:32, opacity:.4 }}>🖼️</span>}
-              {previewImage && (
-                <button onClick={() => setPreviewImage('')}
+              {previewVideo
+                ? <video src={previewVideo} autoPlay muted loop playsInline style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                : previewImage
+                  ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
+                  : <span style={{ fontSize:32, opacity:.4 }}>🖼️</span>
+              }
+              {(previewImage || previewVideo) && (
+                <button onClick={() => { setPreviewImage(''); setPreviewVideo(''); setSelectedVideo(''); }}
                   style={{ position:'absolute', top:6, right:6, background:'rgba(45,38,64,.65)', border:'none', color:'white', borderRadius:'50%', width:20, height:20, fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               )}
             </div>
