@@ -19,7 +19,6 @@ export async function GET(request: Request) {
       .single();
 
     return Response.json({ count: data?.generation_count ?? 0 });
-
   } catch {
     return Response.json({ count: 0 });
   }
