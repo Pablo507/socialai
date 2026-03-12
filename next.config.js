@@ -5,7 +5,10 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'plus.unsplash.com' },
       { protocol: 'https', hostname: 'vaaooxnolvjtpisufgbf.supabase.co' },
+      { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: '*.fal.ai' },
+      { protocol: 'https', hostname: '*.fal.run' },
+      { protocol: 'https', hostname: 'v3.fal.media' },
     ],
   },
   async headers() {
@@ -15,11 +18,21 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "img-src 'self' data: blob: https://images.unsplash.com https://plus.unsplash.com https://vaaooxnolvjtpisufgbf.supabase.co https://*.fal.ai;",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "img-src 'self' data: blob: https://images.unsplash.com https://plus.unsplash.com https://vaaooxnolvjtpisufgbf.supabase.co https://*.supabase.co https://*.fal.ai https://*.fal.run https://v3.fal.media",
+              "connect-src 'self' https://*.supabase.co https://api.groq.com https://api.unsplash.com https://graph.facebook.com https://api.mercadopago.com https://*.fal.run",
+              "media-src 'self' blob: https://*.fal.ai https://*.fal.run https://v3.fal.media",
+              "frame-src 'self' https://www.facebook.com",
+            ].join('; '),
           },
         ],
       },
     ];
   },
 };
+
 module.exports = nextConfig;
