@@ -26,14 +26,6 @@ async function getPost(shareId: string) {
   }
 }
 
-function resolveOgImage(imageUrl: string | null): string | null {
-  if (!imageUrl) return null;
-  // Si ya es una URL del proxy og-image, usarla directamente sin re-envolver
-  if (imageUrl.includes('/api/og-image')) return imageUrl;
-  // Si es una URL externa, pasarla por el proxy
-  return `${APP_URL}/api/og-image?url=${encodeURIComponent(imageUrl)}`;
-}
-
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const post = await getPost(params.id);
 
@@ -46,8 +38,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 
   const copyText = post.copy_text || '';
-  const description = copyText.substring(0, 160) || 'Contenido generado con SocialAI';
-  const ogImageUrl = resolveOgImage(post.image_url);
+  const description = copyText ? copyText.substring(0, 160) : 'Contenido generado con SocialAI';
+  const imageUrl = post.image_url || null;
+  const ogImageUrl = imageUrl ? `${APP_URL}/api/og-image?url=${encodeURIComponent(imageUrl)}` : null;
 
   return {
     title: 'SocialAI — Contenido para redes sociales',
