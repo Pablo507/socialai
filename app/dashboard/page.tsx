@@ -64,7 +64,7 @@ export default function DashboardPage() {
           .from('social_connections')
           .select('id')
           .eq('user_id', currentUser.id)
-          .single();
+        .maybeSingle();
 
         if (conn) setFacebookConnected(true);
       }
