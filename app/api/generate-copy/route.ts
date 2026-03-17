@@ -1,80 +1,93 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Inicialización segura para evitar errores si las variables no existen
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const MAX_FREE = 10;
 
 async function getUsageCount(userId: string): Promise<number> {
-  const { data } = await supabase
-    .from('user_usage')
-    .select('generation_count')
-    .eq('user_id', userId)
-    .single();
-  return data?.generation_count ?? 0;
+  try {
+    const { data, error } = await supabase
+      .from('user_usage')
+      .select('generation_count')
+      .eq('user_id', userId)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') { // PGRST116 es "no rows found"
+      console.error('Error fetching usage:', error);
+      return 0;
+    }
+    return data?.generation_count ?? 0;
+  } catch (e) {
+    console.error('Supabase getUsage error:', e);
+    return 0;
+  }
 }
 
 async function incrementUsage(userId: string) {
-  await supabase.rpc('increment_usage', { uid: userId });
+  try {
+    const { error } = await supabase.rpc('increment_usage', { uid: userId });
+    if (error) console.error('Error incrementing usage:', error);
+  } catch (e) {
+    console.error('RPC increment error:', e);
+  }
 }
 
 export async function POST(request: Request) {
   try {
-    const { prompt, industry, goal, tone, platforms, userId } = await request.json();
-
-    if (!prompt) {
-      return Response.json({ error: 'Prompt requerido' }, { status: 400 });
+    // Validar que el cuerpo de la petición sea JSON válido
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      return Response.json({ error: 'Cuerpo de petición inválido' }, { status: 400 });
     }
 
-    // Verificar límite
-    if (userId) {
+    const { prompt, industry, goal, tone, platforms, userId } = body;
+
+    if (!prompt) {
+      return Response.json({ error: 'El producto o tema es requerido' }, { status: 400 });
+    }
+
+    // 1. Verificar límite (con manejo de errores para que no bloquee la generación si falla DB)
+    if (userId && supabaseUrl) {
       const count = await getUsageCount(userId);
       if (count >= MAX_FREE) {
-        return Response.json({ limitReached: true });
+        return Response.json({ 
+          error: 'Límite alcanzado', 
+          limitReached: true 
+        }, { status: 403 });
       }
     }
 
-    const platformList = platforms?.join(', ') || 'redes sociales';
-
-    // 1. CTA según tono (DECLARADO UNA SOLA VEZ)
+    // 2. Configuración de Prompts e IA
+    const platformList = platforms?.length > 0 ? platforms.join(', ') : 'redes sociales';
+    
     const ctaMap: Record<string, string> = {
-      'Amigable':    '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
-      'Profesional': 'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
-      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
-      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
-      'Inspirador':  'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+      'Amigable':    '¡Escribinos y te ayudamos!',
+      'Profesional': 'Consultá sin compromiso.',
+      'Divertido':    '¿A qué esperás? 👀',
+      'Urgente':      'Solo por hoy — reservá ya.',
+      'Inspirador':  'Empezá tu transformación hoy.',
     };
     const ctaExamples = ctaMap[tone] || ctaMap['Amigable'];
 
-    // 2. Líneas según plataforma (DECLARADO UNA SOLA VEZ)
     const linesMap: Record<string, number> = {
-      'Facebook': 3, 
-      'Instagram': 2, 
-      'WhatsApp': 2,
+      'Facebook': 3, 'Instagram': 2, 'WhatsApp': 2,
     };
-
-    // Calculamos el máximo de líneas permitidas basado en las plataformas elegidas
     const maxLines = Math.max(...(platforms || ['Facebook']).map((p: string) => linesMap[p] || 2));
 
-    const systemPrompt = `Eres un experto en copywriting SEO para redes sociales. Español rioplatense (Uruguay/Argentina).
-REGLAS ABSOLUTAS:
-- Exactamente ${maxLines} líneas de texto + 1 línea de hashtags
-- Línea 1: hook de máximo 8 palabras (pregunta, dato o emoción fuerte)
-- Línea 2: beneficio concreto en máximo 8 palabras
-${maxLines >= 3 ? `- Línea 3: refuerzo o prueba social en máximo 8 palabras\n` : ``}- CTA (última línea de texto): estilo ${ctaExamples}
-- Hashtags: exactamente 3, relevantes para ${platformList}
-- Máximo 1 emoji por línea
-- NUNCA superar 55 palabras en total`;
+    const systemPrompt = `Eres un experto en copywriting SEO para redes sociales de Uruguay y Argentina.
+REGLAS:
+- Máximo ${maxLines} líneas + hashtags.
+- CTA: ${ctaExamples}
+- Idioma: Español rioplatense.`;
 
-    const userPrompt = `Copy SEO para ${platformList}:
-Industria: ${industry || 'General'} | Objetivo: ${goal || 'Engagement'} | Tono: ${tone || 'Amigable'}
-Producto: ${prompt}
-
-Respondé SOLO con el copy, sin explicaciones ni títulos.`;
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    // 3. Llamada a Groq
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
@@ -84,41 +97,46 @@ Respondé SOLO con el copy, sin explicaciones ni títulos.`;
         model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: `Producto: ${prompt}. Industria: ${industry}. Objetivo: ${goal}. Tono: ${tone}.` },
         ],
-        max_tokens: 200,
-        temperature: 0.8,
+        max_tokens: 250,
       }),
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Groq Error: ${error}`);
+    if (!groqResponse.ok) {
+      const errorData = await groqResponse.text();
+      console.error('Groq API Error:', errorData);
+      return Response.json({ error: 'La IA no respondió correctamente' }, { status: 502 });
     }
 
-    const data = await response.json();
-    const copy = data.choices?.[0]?.message?.content?.trim();
+    const groqData = await groqResponse.json();
+    const copy = groqData.choices?.[0]?.message?.content?.trim();
 
-    if (!copy) throw new Error('No se generó contenido');
+    if (!copy) {
+      return Response.json({ error: 'La IA devolvió un resultado vacío' }, { status: 500 });
+    }
 
-    // Incrementar contador y guardar en historial
-    if (userId) {
-      await incrementUsage(userId);
-      await supabase.from('posts').insert({
+    // 4. Guardar historial (en segundo plano, no bloquea la respuesta)
+    if (userId && supabaseUrl) {
+      incrementUsage(userId).catch(console.error);
+      supabase.from('posts').insert({
         user_id: userId,
         prompt,
         copy_text: copy,
         platform: platforms?.[0]?.toLowerCase() || 'general',
         industry: industry || 'General',
-        goal: goal || 'Generar engagement',
-        created_at: new Date().toISOString(),
-      });
+        goal: goal || 'Engagement',
+      }).then(({ error }) => { if (error) console.error('History Save Error:', error); });
     }
 
+    // Respuesta final exitosa
     return Response.json({ copy });
 
   } catch (error: any) {
-    console.error('Copy generation error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error('Global API Error:', error);
+    return Response.json({ 
+      error: 'Error interno del servidor', 
+      details: error.message 
+    }, { status: 500 });
   }
 }
