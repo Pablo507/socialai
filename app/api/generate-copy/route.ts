@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    // Verificar límite si hay usuario autenticado
+    // Verificar límite
     if (userId) {
       const count = await getUsageCount(userId);
       if (count >= MAX_FREE) {
@@ -38,94 +38,35 @@ export async function POST(request: Request) {
 
     const platformList = platforms?.join(', ') || 'redes sociales';
 
-    const ctaByTone: Record<string, string> = {
-      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
-      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
-      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
-      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
-      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
-    };
-    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
-
-    const linesByPlatform: Record<string, string> = {
-      'Facebook':  '3 líneas + hashtags (Facebook permite algo más de contexto)',
-      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
-      'WhatsApp':  '2 líneas sin hashtags (mensaje directo y personal)',
-    };
-    const platformGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' / ') || '3 líneas + hashtags';
-
-    const ctaByTone: Record<string, string> = {
-      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
-      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
-      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
-      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
-      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
-    };
-    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
-
-    const linesByPlatform: Record<string, string> = {
-      'Facebook':  '3 líneas + hashtags (feed amplio, permite algo de contexto)',
-      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
-      'WhatsApp':  '2 líneas sin hashtags (mensaje directo y personal)',
-    };
-    const formatGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' | ') || '3 líneas + hashtags';
-
-    const ctaByTone: Record<string, string> = {
-      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
-      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
-      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
-      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
-      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
-    };
-    const ctaExamples = ctaByTone[tone || 'Amigable'] || ctaByTone['Amigable'];
-
-    const linesByPlatform: Record<string, string> = {
-      'Facebook':  '3 líneas + hashtags (Facebook permite algo más de contexto)',
-      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
-      'WhatsApp':  '2-3 líneas sin hashtags (mensaje directo y personal)',
-    };
-    const formatGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' / ') || '3 líneas + hashtags';
-
-    const ctaByTone: Record<string, string> = {
+    // 1. CTA según tono (DECLARADO UNA SOLA VEZ)
+    const ctaMap: Record<string, string> = {
       'Amigable':    '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
       'Profesional': 'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
-      'Divertido':   '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
-      'Urgente':     'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
-      'Inspirador':  'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
-    };
-    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
-
-    const linesByPlatform: Record<string, string> = {
-      'Facebook':  '3 líneas + hashtags (Facebook permite más contexto)',
-      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
-      'WhatsApp':  '2 líneas sin hashtags (mensaje directo y personal)',
-    };
-    const platformGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' | ') || '3 líneas + hashtags';
-
-    const ctaByTone: Record<string, string> = {
-      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
-      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
       'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
       'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
-      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+      'Inspirador':  'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
     };
-    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
+    const ctaExamples = ctaMap[tone] || ctaMap['Amigable'];
 
-    const linesByPlatform: Record<string, number> = {
-      'Facebook': 4, 'Instagram': 3, 'WhatsApp': 3,
+    // 2. Líneas según plataforma (DECLARADO UNA SOLA VEZ)
+    const linesMap: Record<string, number> = {
+      'Facebook': 3, 
+      'Instagram': 2, 
+      'WhatsApp': 2,
     };
-    const maxLines = Math.max(...(platforms || ['Facebook']).map((p: string) => linesByPlatform[p] || 3));
 
-    const systemPrompt = `Eres un experto en copywriting SEO para redes sociales. Escribís en español rioplatense (Uruguay/Argentina).
+    // Calculamos el máximo de líneas permitidas basado en las plataformas elegidas
+    const maxLines = Math.max(...(platforms || ['Facebook']).map((p: string) => linesMap[p] || 2));
+
+    const systemPrompt = `Eres un experto en copywriting SEO para redes sociales. Español rioplatense (Uruguay/Argentina).
 REGLAS ABSOLUTAS:
 - Exactamente ${maxLines} líneas de texto + 1 línea de hashtags
-- Línea 1: hook de máximo 8 palabras (pregunta, dato sorpresa o emoción fuerte)
+- Línea 1: hook de máximo 8 palabras (pregunta, dato o emoción fuerte)
 - Línea 2: beneficio concreto en máximo 8 palabras
-${maxLines >= 3 ? `- Línea 3: refuerzo o prueba social en máximo 8 palabras\n` : ``}- Última línea de texto: CTA corto usando este estilo: ${ctaExamples}
-- Línea final: exactamente 3 hashtags relevantes para ${platformList}
-- Máximo 1 emoji por línea, solo si suma valor
-- NUNCA superar 55 palabras en total
-- Tono ${tone}: mantenerlo en cada línea`;
+${maxLines >= 3 ? `- Línea 3: refuerzo o prueba social en máximo 8 palabras\n` : ``}- CTA (última línea de texto): estilo ${ctaExamples}
+- Hashtags: exactamente 3, relevantes para ${platformList}
+- Máximo 1 emoji por línea
+- NUNCA superar 55 palabras en total`;
 
     const userPrompt = `Copy SEO para ${platformList}:
 Industria: ${industry || 'General'} | Objetivo: ${goal || 'Engagement'} | Tono: ${tone || 'Amigable'}
@@ -145,7 +86,7 @@ Respondé SOLO con el copy, sin explicaciones ni títulos.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        max_tokens: 500,
+        max_tokens: 200,
         temperature: 0.8,
       }),
     });
@@ -160,11 +101,9 @@ Respondé SOLO con el copy, sin explicaciones ni títulos.`;
 
     if (!copy) throw new Error('No se generó contenido');
 
-    // Incrementar contador después de generación exitosa
+    // Incrementar contador y guardar en historial
     if (userId) {
       await incrementUsage(userId);
-
-      // Guardar en historial
       await supabase.from('posts').insert({
         user_id: userId,
         prompt,
