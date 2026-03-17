@@ -121,8 +121,7 @@ REGLAS ABSOLUTAS:
 - Exactamente ${maxLines} líneas de texto + 1 línea de hashtags
 - Línea 1: hook de máximo 8 palabras (pregunta, dato sorpresa o emoción fuerte)
 - Línea 2: beneficio concreto en máximo 8 palabras
-${maxLines >= 3 ? '- Línea 3: refuerzo o prueba social en máximo 8 palabras
-' : ''}- Última línea de texto: CTA corto usando este estilo → ${ctaExamples}
+${maxLines >= 3 ? `- Línea 3: refuerzo o prueba social en máximo 8 palabras\n` : ``}- Última línea de texto: CTA corto usando este estilo: ${ctaExamples}
 - Línea final: exactamente 3 hashtags relevantes para ${platformList}
 - Máximo 1 emoji por línea, solo si suma valor
 - NUNCA superar 55 palabras en total
