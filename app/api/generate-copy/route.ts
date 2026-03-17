@@ -38,21 +38,101 @@ export async function POST(request: Request) {
 
     const platformList = platforms?.join(', ') || 'redes sociales';
 
-    const systemPrompt = `Eres un experto en marketing digital y copywriting para redes sociales latinoamericanas.
-Escribís copies persuasivos, creativos y adaptados al español rioplatense (Uruguay/Argentina).
-Siempre incluís emojis relevantes, hashtags populares y llamados a la acción efectivos.
-Tu escritura es natural, auténtica y conecta emocionalmente con la audiencia.`;
+    const ctaByTone: Record<string, string> = {
+      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
+      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
+      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
+      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
+      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+    };
+    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
 
-    const userPrompt = `Crea un copy para redes sociales con estas especificaciones:
+    const linesByPlatform: Record<string, string> = {
+      'Facebook':  '3 líneas + hashtags (Facebook permite algo más de contexto)',
+      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
+      'WhatsApp':  '2 líneas sin hashtags (mensaje directo y personal)',
+    };
+    const platformGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' / ') || '3 líneas + hashtags';
 
-- Plataforma(s): ${platformList}
-- Industria: ${industry || 'General'}
-- Objetivo: ${goal || 'Generar engagement'}
-- Tono: ${tone || 'Amigable'}
-- Producto/Idea: ${prompt}
+    const ctaByTone: Record<string, string> = {
+      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
+      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
+      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
+      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
+      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+    };
+    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
 
-Escribí UN copy completo y listo para publicar. Incluí emojis, saltos de línea para mejor lectura, y hashtags al final.
-No incluyas explicaciones ni comentarios, solo el copy.`;
+    const linesByPlatform: Record<string, string> = {
+      'Facebook':  '3 líneas + hashtags (feed amplio, permite algo de contexto)',
+      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
+      'WhatsApp':  '2 líneas sin hashtags (mensaje directo y personal)',
+    };
+    const formatGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' | ') || '3 líneas + hashtags';
+
+    const ctaByTone: Record<string, string> = {
+      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
+      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
+      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
+      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
+      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+    };
+    const ctaExamples = ctaByTone[tone || 'Amigable'] || ctaByTone['Amigable'];
+
+    const linesByPlatform: Record<string, string> = {
+      'Facebook':  '3 líneas + hashtags (Facebook permite algo más de contexto)',
+      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
+      'WhatsApp':  '2-3 líneas sin hashtags (mensaje directo y personal)',
+    };
+    const formatGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' / ') || '3 líneas + hashtags';
+
+    const ctaByTone: Record<string, string> = {
+      'Amigable':    '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
+      'Profesional': 'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
+      'Divertido':   '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
+      'Urgente':     'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
+      'Inspirador':  'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+    };
+    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
+
+    const linesByPlatform: Record<string, string> = {
+      'Facebook':  '3 líneas + hashtags (Facebook permite más contexto)',
+      'Instagram': '2 líneas + hashtags (solo se ven 2 antes del "más")',
+      'WhatsApp':  '2 líneas sin hashtags (mensaje directo y personal)',
+    };
+    const platformGuide = platforms?.map((p: string) => linesByPlatform[p] || '3 líneas + hashtags').join(' | ') || '3 líneas + hashtags';
+
+    const ctaByTone: Record<string, string> = {
+      'Amigable':     '¡Escribinos y te ayudamos! / Contanos qué necesitás 👇 / Mandanos un mensaje hoy',
+      'Profesional':  'Consultá sin compromiso / Solicitá tu presupuesto / Coordiná una reunión →',
+      'Divertido':    '¿A qué esperás? 👀 / Tu billetera te lo agradece 😅 / Spoiler: te va a encantar 🙌',
+      'Urgente':      'Solo por hoy — reservá ya / Últimas unidades disponibles / Oferta termina esta noche ⏰',
+      'Inspirador':   'Empezá tu transformación hoy / El cambio empieza con un paso / Tu mejor versión te espera →',
+    };
+    const ctaExamples = ctaByTone[tone] || ctaByTone['Amigable'];
+
+    const linesByPlatform: Record<string, number> = {
+      'Facebook': 4, 'Instagram': 3, 'WhatsApp': 3,
+    };
+    const maxLines = Math.max(...(platforms || ['Facebook']).map((p: string) => linesByPlatform[p] || 3));
+
+    const systemPrompt = `Eres un experto en copywriting SEO para redes sociales. Escribís en español rioplatense (Uruguay/Argentina).
+REGLAS ABSOLUTAS:
+- Exactamente ${maxLines} líneas de texto + 1 línea de hashtags
+- Línea 1: hook de máximo 8 palabras (pregunta, dato sorpresa o emoción fuerte)
+- Línea 2: beneficio concreto en máximo 8 palabras
+${maxLines >= 3 ? '- Línea 3: refuerzo o prueba social en máximo 8 palabras
+' : ''}- Última línea de texto: CTA corto usando este estilo → ${ctaExamples}
+- Línea final: exactamente 3 hashtags relevantes para ${platformList}
+- Máximo 1 emoji por línea, solo si suma valor
+- NUNCA superar 55 palabras en total
+- Tono ${tone}: mantenerlo en cada línea`;
+
+    const userPrompt = `Copy SEO para ${platformList}:
+Industria: ${industry || 'General'} | Objetivo: ${goal || 'Engagement'} | Tono: ${tone || 'Amigable'}
+Producto: ${prompt}
+
+Respondé SOLO con el copy, sin explicaciones ni títulos.`;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
