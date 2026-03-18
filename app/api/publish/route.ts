@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
       if (imageUrl) {
         const uploadRes = await fetch(
-          `https://graph.facebook.com/v19.0/${pageId}/photos`,
+          `https://graph.facebook.com/v21.0/${pageId}/photos`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         publishRes = await uploadRes.json();
       } else {
         const postRes = await fetch(
-          `https://graph.facebook.com/v19.0/${pageId}/feed`,
+          `https://graph.facebook.com/v21.0/${pageId}/feed`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
 
       // Paso 1: Crear contenedor de media
       const containerRes = await fetch(
-        `https://graph.facebook.com/v19.0/${igAccountId}/media`,
+        `https://graph.facebook.com/v21.0/${igAccountId}/media`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
       // Paso 2: Publicar el contenedor
       const publishRes = await fetch(
-        `https://graph.facebook.com/v19.0/${igAccountId}/media_publish`,
+        `https://graph.facebook.com/v21.0/${igAccountId}/media_publish`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
