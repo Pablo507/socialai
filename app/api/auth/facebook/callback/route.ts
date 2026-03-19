@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   try {
     // 1. Intercambiar code por short-lived access token
     const tokenRes = await fetch(
-      `https://graph.facebook.com/v19.0/oauth/access_token` +
+      `https://graph.facebook.com/v21.0/oauth/access_token` +
       `?client_id=${process.env.FACEBOOK_APP_ID}` +
       `&client_secret=${process.env.FACEBOOK_APP_SECRET}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
     // 2. Extender a long-lived token (~60 días)
     const longLivedRes = await fetch(
-      `https://graph.facebook.com/v19.0/oauth/access_token` +
+      `https://graph.facebook.com/v21.0/oauth/access_token` +
       `?grant_type=fb_exchange_token` +
       `&client_id=${process.env.FACEBOOK_APP_ID}` +
       `&client_secret=${process.env.FACEBOOK_APP_SECRET}` +
@@ -46,14 +46,14 @@ export async function GET(request: Request) {
 
     // 3. Obtener ID del usuario de Facebook
     const meRes = await fetch(
-      `https://graph.facebook.com/v19.0/me?access_token=${userAccessToken}`
+      `https://graph.facebook.com/v21.0/me?access_token=${userAccessToken}`
     );
     const meData = await meRes.json();
     const facebookUserId = meData.id;
 
     // 4. Obtener páginas de Facebook que administra
     const pagesRes = await fetch(
-      `https://graph.facebook.com/v19.0/me/accounts?access_token=${userAccessToken}`
+      `https://graph.facebook.com/v21.0/me/accounts?access_token=${userAccessToken}`
     );
     const pagesData = await pagesRes.json();
     const pages = pagesData.data || [];
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     const connections: any[] = [];
     for (const page of pages) {
       const igRes = await fetch(
-        `https://graph.facebook.com/v19.0/${page.id}` +
+        `https://graph.facebook.com/v21.0/${page.id}` +
         `?fields=instagram_business_account` +
         `&access_token=${page.access_token}`
       );
