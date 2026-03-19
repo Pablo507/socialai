@@ -38,14 +38,26 @@ export default function PrivacyPage() {
             ]
           },
           {
-            title: '3. Redes sociales conectadas',
+            title: '3. Redes sociales conectadas (Facebook e Instagram)',
             content: [
               'Si conectás tu cuenta de Facebook o Instagram a SocialAI:',
-              '• Solo accedemos a los permisos que vos autorizás explícitamente',
+              '• Solo accedemos a los permisos que vos autorizás explícitamente: instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement',
               '• Nunca publicamos contenido sin tu confirmación previa',
               '• Podés desconectar tu cuenta en cualquier momento desde la configuración',
               '• Los tokens de acceso se almacenan de forma encriptada',
               '• No compartimos tu información de redes sociales con terceros',
+              '• Cumplimos con las Políticas de la Plataforma de Meta y los Términos de Servicio de Instagram',
+            ]
+          },
+          {
+            title: '3b. Eliminación de datos de Facebook (Data Deletion)',
+            content: [
+              'De acuerdo con los requisitos de la Plataforma de Meta, ofrecemos un mecanismo automático de eliminación de datos:',
+              '• Si eliminás SocialAI desde la configuración de tu cuenta de Facebook, Meta nos notifica automáticamente',
+              '• Al recibir esa notificación, eliminamos de inmediato todos los tokens de acceso y datos asociados a tu cuenta de Facebook',
+              '• Podés solicitar la eliminación manual de tus datos en cualquier momento escribiendo a: privacy@socialai.app',
+              '• Nuestro Data Deletion Callback URL está registrado en Meta: https://socialai-iota.vercel.app/api/data-deletion',
+              '• Tras la eliminación, recibís un código de confirmación que podés consultar en: https://socialai-iota.vercel.app/data-deletion',
             ]
           },
           {
@@ -79,7 +91,7 @@ export default function PrivacyPage() {
               '• Solicitar la eliminación completa de tu cuenta y datos',
               '• Exportar tu historial de contenido generado',
               '• Desconectar tus redes sociales en cualquier momento',
-              'Para ejercer estos derechos, escribinos a: privacidad@socialai.uy',
+              'Para ejercer estos derechos, escribinos a: privacy@socialai.app',
             ]
           },
           {
@@ -110,7 +122,7 @@ export default function PrivacyPage() {
             title: '10. Contacto',
             content: [
               'Para consultas sobre privacidad:',
-              '• Email: privacidad@socialai.uy',
+              '• Email: privacy@socialai.app',
               '• Respondemos en un plazo máximo de 48 horas hábiles',
             ]
           },
@@ -134,3 +146,4 @@ export default function PrivacyPage() {
     </div>
   );
 }
+        
