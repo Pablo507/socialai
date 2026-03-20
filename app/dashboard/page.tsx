@@ -303,12 +303,17 @@ export default function DashboardPage() {
         body: JSON.stringify({ prompt: copyPrompt, industry, goal, tone, platforms: selectedPlatforms, userId: user?.id }),
       });
       const data = await res.json();
-      if (data.copy) {
+      // ✅ FIX: manejar limitReached igual que en generateVideo
+      if (data.limitReached) {
+        setShowModal(true);
+      } else if (data.copy) {
         setCopyResult(data.copy);
         setPreviewContent(data.copy.substring(0, 150) + '...');
         setUsageCount(c => c + 1);
         if (user) setTimeout(() => loadHistory(user.id), 1000);
-      } else { alert('Error: ' + data.error); }
+      } else {
+        alert('Error: ' + (data.error || 'Error desconocido al generar copy'));
+      }
     } catch { alert('Error de conexión'); }
     setCopyLoading(false);
   }
