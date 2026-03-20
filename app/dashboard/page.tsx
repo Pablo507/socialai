@@ -326,12 +326,16 @@ export default function DashboardPage() {
         body: JSON.stringify({ prompt, userId: user?.id }),
       });
       const data = await res.json();
-      if (data.images) {
+      // ✅ FIX: manejar limitReached igual que en generateVideo
+      if (data.limitReached) {
+        setShowModal(true);
+      } else if (data.images) {
         setImages(data.images);
         setUsageCount(c => c + 1);
         if (user) setTimeout(() => loadHistory(user.id), 1000);
+      } else {
+        alert('Error: ' + (data.error || 'Error desconocido al generar imágenes'));
       }
-      else { alert('Error: ' + data.error); }
     } catch { alert('Error de conexión'); }
     setImageLoading(false);
   }
