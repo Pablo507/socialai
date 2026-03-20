@@ -111,6 +111,10 @@ Respondé SOLO con el copy, sin explicaciones ni títulos.`;
 
   } catch (error: any) {
     console.error('Copy generation error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const msg =
+      error?.message ??
+      (typeof error === 'string' ? error : JSON.stringify(error)) ??
+      'Error desconocido';
+    return Response.json({ error: msg }, { status: 500 });
   }
 }
