@@ -66,6 +66,10 @@ export async function POST(request: Request) {
 
     const accessKey = process.env.UNSPLASH_ACCESS_KEY;
 
+    if (!accessKey) {
+      return Response.json({ error: 'UNSPLASH_ACCESS_KEY no configurada en Vercel' }, { status: 500 });
+    }
+
     // Traducir prompt a keywords en inglés
     const englishKeywords = await extractEnglishKeywords(prompt);
 
@@ -76,6 +80,9 @@ export async function POST(request: Request) {
       'social media content',
     ];
 
+    // ✅ FIX: Devuelve la URL directamente en vez de convertir a base64.
+    // Antes: descargaba 4 imágenes (~500KB c/u) en el servidor → ~2.7MB de JSON → timeout en Vercel.
+    // Ahora: devuelve solo la URL → el browser carga la imagen directo desde Unsplash.
     const imagePromises = queries.map(async (query) => {
       for (const q of [query, 'business', 'technology', 'marketing']) {
         const res = await fetch(
@@ -86,11 +93,7 @@ export async function POST(request: Request) {
           const data = await res.json();
           const imageUrl = data.urls?.regular;
           if (imageUrl) {
-            const imgRes = await fetch(imageUrl);
-            const buffer = await imgRes.arrayBuffer();
-            const base64 = Buffer.from(buffer).toString('base64');
-            const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-            return `data:${contentType};base64,${base64}`;
+            return imageUrl; // ✅ URL directa, sin conversión a base64
           }
         }
       }
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
       await supabase.from('posts').insert({
         user_id: userId,
         prompt,
-        image_url: null, // base64 no se guarda en posts, solo la URL si se sube
+        image_url: images[0] ?? null, // ✅ Ahora sí guardamos la URL de la primera imagen
         platform: 'general',
         created_at: new Date().toISOString(),
       });
@@ -117,6 +120,11 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Image generation error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    // ✅ FIX: error.message es undefined si el error no es una instancia de Error
+    const msg =
+      error?.message ??
+      (typeof error === 'string' ? error : JSON.stringify(error)) ??
+      'Error desconocido';
+    return Response.json({ error: msg }, { status: 500 });
   }
 }
