@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function DashboardPage() {
+  // --- ESTADOS ORIGINALES ---
   const [usageCount, setUsageCount] = useState(0);
   const maxUsage = 10;
   const [activePanel, setActivePanel] = useState('copy');
@@ -29,17 +30,12 @@ export default function DashboardPage() {
   const [copied, setCopied] = useState(false);
   const [facebookConnected, setFacebookConnected] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [publishResult, setPublishResult] = useState<{success?: boolean; error?: string; platform?: string} | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [videoPrompt, setVideoPrompt] = useState('');
-  const [videoStatus, setVideoStatus] = useState<'idle'|'processing'|'completed'|'failed'>('idle');
-  const [videoResults, setVideoResults] = useState<{url:string,thumbnail:string,duration:number,photographer:string}[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState('');
-  const [previewVideo, setPreviewVideo] = useState('');
-  const pollingRef = useRef<NodeJS.Timeout|null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [showRightPanel, setShowRightPanel] = useState(false);
+  
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  // --- EFECTOS ---
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -49,7 +45,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const supabase = createClient();
-
     async function init() {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       setUser(currentUser);
@@ -61,20 +56,20 @@ export default function DashboardPage() {
           .select('id')
           .eq('user_id', currentUser.id)
           .maybeSingle();
-
         if (conn) setFacebookConnected(true);
       }
 
       const params = new URLSearchParams(window.location.search);
       if (params.get('success') === 'connected') {
         setFacebookConnected(true);
-        showToast('✅ Facebook conectado');
+        showToast('✅ Facebook conectado correctamente');
         window.history.replaceState({}, '', '/dashboard');
       }
     }
     init();
   }, []);
 
+  // --- FUNCIONES ---
   async function loadHistory(userId: string) {
     try {
       const [histRes, usageRes] = await Promise.all([
@@ -94,11 +89,10 @@ export default function DashboardPage() {
   }
 
   function connectFacebook() {
-    if (!user) return showToast('⚠️ Inicia sesión');
+    if (!user) return showToast('⚠️ Debes iniciar sesión');
     window.location.href = `/api/auth/facebook?state=${user.id}`;
   }
 
-  // ✅ CORRECCIÓN DEL ERROR DE COMPILACIÓN
   async function publishDirect(platform: 'facebook' | 'instagram') {
     if (!user) return;
     setPublishing(true);
@@ -109,9 +103,9 @@ export default function DashboardPage() {
         showToast('⏳ Procesando imagen...');
         const uploadedUrl = await uploadImageForSharing();
         if (!uploadedUrl) {
-            showToast('❌ Error al procesar imagen');
-            setPublishing(false);
-            return;
+          showToast('❌ Error al subir imagen');
+          setPublishing(false);
+          return;
         }
         imageUrl = uploadedUrl;
       }
@@ -122,12 +116,12 @@ export default function DashboardPage() {
         body: JSON.stringify({
           platform,
           text: copyResult || previewContent,
-          imageUrl: imageUrl, // Aquí ya está garantizado que es string o la URL original
+          imageUrl: imageUrl,
           userId: user.id,
         }),
       });
       const data = await res.json();
-      if (data.success) showToast(`✅ ¡Publicado en ${platform}!`);
+      if (data.success) showToast(`✅ Publicado en ${platform}`);
       else showToast('❌ Error: ' + data.error);
     } catch {
       showToast('❌ Error de red');
@@ -150,11 +144,22 @@ export default function DashboardPage() {
     } catch { return null; } finally { setUploadingImage(false); }
   }
 
+  // --- ESTILOS ---
   const C = {
-    bg: '#FAF8F5', surface: '#FFFFFF', border: '#E8E0F0', text: '#2D2640',
-    textMuted: '#7B6E99', accent: '#7C5CBF', accentSoft: '#EDE8F8',
+    bg: '#FAF8F5',
+    surface: '#FFFFFF',
+    border: '#E8E0F0',
+    text: '#2D2640',
+    textMuted: '#7B6E99',
+    accent: '#7C5CBF',
+    accentSoft: '#EDE8F8',
     grad: 'linear-gradient(135deg, #7C5CBF, #B07FE8)',
   };
+
+  const inputStyle = { 
+    width:'100%', background:C.surface, border:`1.5px solid ${C.border}`, 
+    borderRadius:12, padding:'12px', fontSize:14, outline:'none', marginBottom:15 
+  } as React.CSSProperties;
 
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", background:C.bg, color:C.text, minHeight:'100vh' }}>
@@ -164,53 +169,105 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showPublishModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.4)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'#fff', padding:30, borderRadius:20, maxWidth:400, width:'90%' }}>
-            <h3 style={{ marginBottom:20 }}>🚀 Publicar ahora</h3>
-            <button onClick={() => publishDirect('facebook')} disabled={publishing} style={{ width:'100%', padding:12, background:'#1877f2', color:'#fff', border:'none', borderRadius:10, marginBottom:10, cursor:'pointer' }}>
-               {publishing ? 'Procesando...' : 'Facebook'}
-            </button>
-            <button onClick={() => setShowPublishModal(false)} style={{ width:'100%', marginTop:10, background:'none', border:'none', color:C.textMuted, cursor:'pointer' }}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
+      {/* NAVBAR */}
       <nav style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 32px', borderBottom:`1px solid ${C.border}`, background:C.surface, position:'sticky', top:0, zIndex:100 }}>
         <div style={{ fontSize:22, fontWeight:800, background:C.grad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SocialAI</div>
         <div style={{ background:C.accentSoft, borderRadius:20, padding:'5px 14px', fontSize:12, color:C.accent, fontWeight:700 }}>
-          ✦ {maxUsage - usageCount} créditos
+          ✦ {maxUsage - usageCount} créditos libres
         </div>
       </nav>
 
-      <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr 300px', minHeight:'calc(100vh - 70px)' }}>
+      <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '220px 1fr 320px', minHeight:'calc(100vh - 70px)' }}>
+        
+        {/* SIDEBAR IZQUIERDO */}
         <aside style={{ borderRight:`1px solid ${C.border}`, padding:20, background:C.surface }}>
-           <button style={{ width:'100%', padding:12, borderRadius:10, background:C.accentSoft, color:C.accent, border:'none', fontWeight:700 }}>✍️ Copy</button>
+          <button onClick={() => setActivePanel('copy')} style={{ width:'100%', padding:12, textAlign:'left', borderRadius:10, marginBottom:8, border:'none', cursor:'pointer', background:activePanel==='copy'?C.accentSoft:'transparent', color:activePanel==='copy'?C.accent:C.textMuted, fontWeight:700 }}>✍️ Crear Copy</button>
+          <button onClick={() => setActivePanel('images')} style={{ width:'100%', padding:12, textAlign:'left', borderRadius:10, marginBottom:8, border:'none', cursor:'pointer', background:activePanel==='images'?C.accentSoft:'transparent', color:activePanel==='images'?C.accent:C.textMuted, fontWeight:700 }}>🖼️ Imágenes AI</button>
+          <button onClick={() => setActivePanel('history')} style={{ width:'100%', padding:12, textAlign:'left', borderRadius:10, marginBottom:8, border:'none', cursor:'pointer', background:activePanel==='history'?C.accentSoft:'transparent', color:activePanel==='history'?C.accent:C.textMuted, fontWeight:700 }}>📜 Historial</button>
         </aside>
 
-        <main style={{ padding:28 }}>
-          <h1 style={{ fontSize:24, marginBottom:20 }}>Panel de Control</h1>
-          <textarea 
-            value={copyPrompt} 
-            onChange={e => setCopyPrompt(e.target.value)} 
-            style={{ width:'100%', minHeight:150, borderRadius:12, border:`1px solid ${C.border}`, padding:15 }} 
-            placeholder="Describe tu publicación..."
-          />
+        {/* CONTENIDO CENTRAL */}
+        <main style={{ padding:32, overflowY:'auto' }}>
+          <h1 style={{ fontSize:24, fontWeight:800, marginBottom:24 }}>
+            {activePanel === 'copy' ? 'Generador de contenido' : 'Creador de Imágenes'}
+          </h1>
+          
+          <div style={{ background:C.surface, padding:24, borderRadius:20, border:`1px solid ${C.border}`, boxShadow:'0 4px 20px rgba(0,0,0,0.03)' }}>
+            <label style={{ display:'block', fontSize:11, fontWeight:800, color:C.textMuted, marginBottom:8, textTransform:'uppercase' }}>Descripción de tu post</label>
+            <textarea 
+              value={copyPrompt} 
+              onChange={e => setCopyPrompt(e.target.value)} 
+              style={{ ...inputStyle, minHeight:120 }} 
+              placeholder="Ej: Promo de 2x1 en hamburguesas solo por hoy..."
+            />
+            
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:15 }}>
+              <div>
+                <label style={{ display:'block', fontSize:11, fontWeight:800, color:C.textMuted, marginBottom:8 }}>TONO</label>
+                <select value={tone} onChange={e => setTone(e.target.value)} style={inputStyle}>
+                  <option>Amigable</option><option>Profesional</option><option>Persuasivo</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display:'block', fontSize:11, fontWeight:800, color:C.textMuted, marginBottom:8 }}>OBJETIVO</label>
+                <select value={goal} onChange={e => setGoal(e.target.value)} style={inputStyle}>
+                  <option>Vender</option><option>Informar</option><option>Interactuar</option>
+                </select>
+              </div>
+            </div>
+
+            <button style={{ width:'100%', padding:14, background:C.grad, color:'#fff', border:'none', borderRadius:12, fontWeight:700, cursor:'pointer', marginTop:10 }}>
+              Generar Propuestas ✨
+            </button>
+          </div>
         </main>
 
-        <aside style={{ borderLeft:`1px solid ${C.border}`, padding:20, background:'#fff' }}>
-          <div style={{ border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden', marginBottom:20 }}>
-            {previewImage && <img src={previewImage} style={{ width:'100%' }} />}
-            <div style={{ padding:15, fontSize:13 }}>{copyResult || previewContent}</div>
+        {/* PANEL DERECHO: PREVIEW */}
+        <aside style={{ borderLeft:`1px solid ${C.border}`, padding:24, background:C.surface }}>
+          <h3 style={{ fontSize:14, fontWeight:800, marginBottom:20, color:C.textMuted }}>VISTA PREVIA</h3>
+          
+          <div style={{ border:`1px solid ${C.border}`, borderRadius:16, overflow:'hidden', background:C.bg, marginBottom:24 }}>
+            <div style={{ aspectRatio:'1/1', background:'#ddd', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {previewImage ? <img src={previewImage} style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <span style={{ color:C.textDim }}>Imagen del post</span>}
+            </div>
+            <div style={{ padding:16, fontSize:14, lineHeight:'1.5', color:C.text }}>
+              {copyResult || previewContent}
+            </div>
           </div>
 
-          {facebookConnected ? (
-            <button onClick={() => setShowPublishModal(true)} style={{ width:'100%', padding:12, background:C.grad, color:'#fff', border:'none', borderRadius:10, fontWeight:700, cursor:'pointer' }}>🚀 Publicar</button>
-          ) : (
-            <button onClick={connectFacebook} style={{ width:'100%', padding:12, background:'#1877f2', color:'#fff', border:'none', borderRadius:10, fontWeight:700, cursor:'pointer' }}>📘 Conectar Facebook</button>
-          )}
+          <div style={{ display:'grid', gap:12 }}>
+            {facebookConnected ? (
+              <button onClick={() => setShowPublishModal(true)} style={{ width:'100%', padding:14, background:C.grad, color:'#fff', border:'none', borderRadius:12, fontWeight:700, cursor:'pointer' }}>
+                🚀 Publicar en Redes
+              </button>
+            ) : (
+              <button onClick={connectFacebook} style={{ width:'100%', padding:14, background:'#1877f2', color:'#fff', border:'none', borderRadius:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                <span style={{ fontSize:18 }}>📘</span> Conectar Facebook
+              </button>
+            )}
+            
+            <button style={{ width:'100%', padding:12, background:'transparent', border:`1px solid ${C.border}`, borderRadius:12, color:C.textMuted, cursor:'pointer', fontSize:13 }}>
+              📥 Descargar Arte
+            </button>
+          </div>
         </aside>
       </div>
+
+      {/* MODAL DE PUBLICACIÓN (IDÉNTICO AL ANTERIOR) */}
+      {showPublishModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', backdropFilter:'blur(4px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div style={{ background:'#fff', padding:32, borderRadius:24, maxWidth:400, width:'100%', textAlign:'center' }}>
+            <h3 style={{ fontSize:20, fontWeight:800, marginBottom:10 }}>¿Dónde publicamos?</h3>
+            <p style={{ color:C.textMuted, fontSize:14, marginBottom:24 }}>Selecciona la plataforma de destino</p>
+            
+            <button onClick={() => publishDirect('facebook')} disabled={publishing} style={{ width:'100%', padding:14, background:'#1877f2', color:'#fff', border:'none', borderRadius:12, marginBottom:12, fontWeight:700, cursor:'pointer' }}>
+               {publishing ? 'Publicando...' : 'Facebook Page'}
+            </button>
+            
+            <button onClick={() => setShowPublishModal(false)} style={{ width:'100%', padding:12, background:'none', border:'none', color:C.textMuted, cursor:'pointer', fontWeight:600 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
