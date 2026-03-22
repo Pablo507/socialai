@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -17,7 +17,8 @@ export async function GET(request: Request) {
           getAll() {
             return cookieStore.getAll();
           },
-          setAll(cookiesToSet) {
+          // Definimos el tipo explícitamente para que Vercel no se queje
+          setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
@@ -26,15 +27,13 @@ export async function GET(request: Request) {
       }
     );
 
-    // Intercambia el código de Facebook por una sesión de Supabase
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Redirige al Dashboard de SocialAI tras la conexión exitosa
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  // En caso de error, redirige al login con un mensaje
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  // En caso de error, redirige al dashboard o una página de error
+  return NextResponse.redirect(`${origin}/dashboard?error=auth_failed`);
 }
