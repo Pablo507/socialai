@@ -1,12 +1,11 @@
-
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const userId = searchParams.get('state'); // <--- El UUID del usuario que enviamos desde el botón
+  const userId = searchParams.get('state'); // El UUID del usuario
 
   if (!code || !userId) {
     return NextResponse.redirect(`${origin}/dashboard?error=missing_parameters`);
@@ -19,8 +18,11 @@ export async function GET(request: Request) {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        // ✅ Corregido: Agregamos el tipo explícito para evitar el error de Vercel
+        setAll: (cookiesToSet: { name: string; value: string; options: CookieOptions }[]) => {
+          cookiesToSet.forEach(({ name, value, options }) => 
+            cookieStore.set(name, value, options)
+          );
         },
       },
     }
@@ -50,19 +52,20 @@ export async function GET(request: Request) {
       instagram_account_id: page.instagram_business_account?.id || null,
     }));
 
-    // 3. Guardar en la tabla social_connections (La que aseguramos con RLS)
+    // 3. Guardar en la tabla social_connections
     const { error: dbError } = await supabase
       .from('social_connections')
       .upsert({
         user_id: userId,
-        facebook_user_id: tokenData.user_id || userId, // Ajustar según lo que devuelva Meta
+        facebook_user_id: tokenData.user_id || userId, 
         user_access_token: userToken,
-        connections: connections, // Guardamos el array directamente (JSONB)
+        connections: connections, // Guardamos el array directamente
         updated_at: new Date().toISOString(),
       });
 
     if (dbError) throw dbError;
 
+    // Redirigir con éxito
     return NextResponse.redirect(`${origin}/dashboard?success=connected`);
 
   } catch (err: any) {
