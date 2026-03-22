@@ -1,42 +1,22 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  const cookieStore = cookies();
   const { searchParams } = new URL(request.url);
-  
-  // 1. Intentar obtener el ID del usuario desde el parámetro 'state'
-  let userId = searchParams.get('state');
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        // ✅ CORRECCIÓN: Agregamos el tipo explícito a cookiesToSet
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
+  // ✅ FIX: El userId siempre llega desde el dashboard como ?state=uuid
+  // ya NO usamos el fallback Math.random() que generaba strings no-UUID
+  const userId = searchParams.get('state');
 
-  // Si no venía en la URL, intentamos obtenerlo de la sesión activa
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+
   if (!userId) {
-    const { data: { user } } = await supabase.auth.getUser();
-    userId = user?.id || null;
+    // Si por alguna razón no hay userId, redirigir a login
+    return Response.redirect(`${appUrl}/auth/login`);
   }
 
-  // Si no hay ID, usamos un fallback (aunque para guardar tokens debería existir)
-  const state = userId ?? Math.random().toString(36).substring(2);
-
   const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID;
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`;
-  
+  const redirectUri = `${appUrl}/api/auth/facebook/callback`;
+
   const scopes = [
     'instagram_basic',
     'instagram_content_publish',
@@ -52,7 +32,7 @@ export async function GET(request: NextRequest) {
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=${scopes}` +
     `&response_type=code` +
-    `&state=${state}`;
+    `&state=${userId}`;
 
   return Response.redirect(facebookAuthUrl);
 }
