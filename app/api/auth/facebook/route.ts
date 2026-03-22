@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
     'instagram_content_publish',
     'pages_show_list',
     'pages_read_engagement',
-    'pages_manage_posts',
     'public_profile',
     'email',
   ].join(',');
