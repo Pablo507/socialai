@@ -1,50 +1,40 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
-export async function GET() {
-  const cookieStore = cookies();
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get('code');
+  const next = searchParams.get('next') ?? '/dashboard';
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
+  if (code) {
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          },
         },
-        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        },
-      },
+      }
+    );
+
+    // Intercambia el código de Facebook por una sesión de Supabase
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      // Redirige al Dashboard de SocialAI tras la conexión exitosa
+      return NextResponse.redirect(`${origin}${next}`);
     }
-  );
+  }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  const state = user?.id ?? Math.random().toString(36).substring(2);
-
-  const clientId = process.env.FACEBOOK_APP_ID;
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`;
-  
-  const scopes = [
-    'instagram_basic',
-    'instagram_content_publish',
-    'pages_show_list',
-    'pages_read_engagement',
-    'public_profile',
-    'email',
-  ].join(',');
-
-  // URL con auth_type=rerequest para evitar el loop de contraseña
-  const facebookAuthUrl =
-    `https://www.facebook.com/v21.0/dialog/oauth` +
-    `?client_id=${clientId}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=${scopes}` +
-    `&response_type=code` +
-    `&state=${state}` +
-    `&auth_type=rerequest`; 
-
-  return Response.redirect(facebookAuthUrl);
+  // En caso de error, redirige al login con un mensaje
+  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
 }
