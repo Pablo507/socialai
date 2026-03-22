@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function DashboardPage() {
-  // --- ESTADOS ORIGINALES ---
+  // --- ESTADOS ---
   const [usageCount, setUsageCount] = useState(0);
   const maxUsage = 10;
   const [activePanel, setActivePanel] = useState('copy');
@@ -144,13 +144,14 @@ export default function DashboardPage() {
     } catch { return null; } finally { setUploadingImage(false); }
   }
 
-  // --- ESTILOS ---
+  // --- ESTILOS (CORREGIDOS) ---
   const C = {
     bg: '#FAF8F5',
     surface: '#FFFFFF',
     border: '#E8E0F0',
     text: '#2D2640',
     textMuted: '#7B6E99',
+    textDim: '#B5AACC', // <--- Agregado para corregir el error de build
     accent: '#7C5CBF',
     accentSoft: '#EDE8F8',
     grad: 'linear-gradient(135deg, #7C5CBF, #B07FE8)',
@@ -245,25 +246,19 @@ export default function DashboardPage() {
                 <span style={{ fontSize:18 }}>📘</span> Conectar Facebook
               </button>
             )}
-            
-            <button style={{ width:'100%', padding:12, background:'transparent', border:`1px solid ${C.border}`, borderRadius:12, color:C.textMuted, cursor:'pointer', fontSize:13 }}>
-              📥 Descargar Arte
-            </button>
           </div>
         </aside>
       </div>
 
-      {/* MODAL DE PUBLICACIÓN (IDÉNTICO AL ANTERIOR) */}
+      {/* MODAL DE PUBLICACIÓN */}
       {showPublishModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', backdropFilter:'blur(4px)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
           <div style={{ background:'#fff', padding:32, borderRadius:24, maxWidth:400, width:'100%', textAlign:'center' }}>
             <h3 style={{ fontSize:20, fontWeight:800, marginBottom:10 }}>¿Dónde publicamos?</h3>
             <p style={{ color:C.textMuted, fontSize:14, marginBottom:24 }}>Selecciona la plataforma de destino</p>
-            
             <button onClick={() => publishDirect('facebook')} disabled={publishing} style={{ width:'100%', padding:14, background:'#1877f2', color:'#fff', border:'none', borderRadius:12, marginBottom:12, fontWeight:700, cursor:'pointer' }}>
                {publishing ? 'Publicando...' : 'Facebook Page'}
             </button>
-            
             <button onClick={() => setShowPublishModal(false)} style={{ width:'100%', padding:12, background:'none', border:'none', color:C.textMuted, cursor:'pointer', fontWeight:600 }}>Cancelar</button>
           </div>
         </div>
