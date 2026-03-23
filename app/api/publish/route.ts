@@ -1,37 +1,70 @@
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-const supabase = createClient(
+// Cliente admin para leer social_connections
+const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function POST(request: Request) {
   try {
-    const { platform, text, imageUrl, facebookUserId, pageIndex = 0 } = await request.json();
+    // ✅ SEGURIDAD: Verificar la sesión en el servidor, nunca confiar en el cliente
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: (cookiesToSet: { name: string; value: string; options: CookieOptions }[]) => {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
+    // ✅ SEGURIDAD: Obtener el usuario autenticado desde la sesión del servidor
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return Response.json(
+        { error: 'No autorizado. Iniciá sesión para publicar.' },
+        { status: 401 }
+      );
+    }
+
+    const { platform, text, imageUrl, pageIndex = 0 } = await request.json();
 
     if (!platform || !text) {
       return Response.json({ error: 'platform y text son requeridos' }, { status: 400 });
     }
 
-    // 1. Obtener tokens guardados de Supabase
-    const { data: conn, error } = await supabase
+    // ✅ SEGURIDAD: Usar el user.id de la sesión del servidor, nunca del body del request
+    const { data: conn, error } = await supabaseAdmin
       .from('social_connections')
       .select('*')
-      .eq('user_id', facebookUserId)  // ✅ buscar por user_id de Supabase
+      .eq('user_id', user.id)
       .single();
 
     if (error || !conn) {
       return Response.json({ error: 'Cuenta de Facebook no conectada' }, { status: 401 });
     }
 
-    const connections = JSON.parse(conn.connections);
+    // ✅ Manejar connections tanto si viene como string o como objeto (Supabase JSONB)
+    const connections = typeof conn.connections === 'string'
+      ? JSON.parse(conn.connections)
+      : conn.connections;
+
     const connection = connections[pageIndex];
 
     if (!connection) {
       return Response.json({ error: 'No se encontró la página' }, { status: 400 });
     }
 
-    // ─── PUBLICAR EN FACEBOOK ──────────────────────────────
+    // ─── PUBLICAR EN FACEBOOK ──────────────────────────────────────────────────
     if (platform === 'facebook') {
       const pageToken = connection.facebook_page_token;
       const pageId = connection.facebook_page_id;
@@ -80,7 +113,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // ─── PUBLICAR EN INSTAGRAM ────────────────────────────
+    // ─── PUBLICAR EN INSTAGRAM ─────────────────────────────────────────────────
     if (platform === 'instagram') {
       const igAccountId = connection.instagram_account_id;
       const pageToken = connection.facebook_page_token;
