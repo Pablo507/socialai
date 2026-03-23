@@ -142,13 +142,7 @@ export default function DashboardPage() {
       tone,
     };
     sessionStorage.setItem('socialai_draft', JSON.stringify(draft));
-    // ✅ FIX: Pasar el userId explícitamente como state para que el callback
-    // siempre tenga un UUID válido, sin depender de leer la cookie en el servidor
-    if (!user?.id) {
-      showToast('❌ Debés iniciar sesión antes de conectar Facebook.');
-      return;
-    }
-    window.location.href = `/api/auth/facebook?state=${user.id}`;
+    window.location.href = '/api/auth/facebook';
   }
 
   function openShareModal(platform: string) {
@@ -247,7 +241,6 @@ export default function DashboardPage() {
           platform,
           text: copyResult || previewContent,
           imageUrl,
-          facebookUserId: user.id,
         }),
       });
       const data = await res.json();
